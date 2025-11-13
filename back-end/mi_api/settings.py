@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-uw4m&_u@9_kehx!ptc=hnuzbm2tjlf1*s-7qfp*i!gsc3sfz5b
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['54.234.221.254', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['*']
 
 CSRF_TRUSTED_ORIGINS = [
     'http://54.234.221.254',
@@ -91,9 +91,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'nee',
-        'USER': 'admin',
-        'PASSWORD': 'Codawbo2002-.',        # o la contraseña que uses
-        'HOST': 'nee.cfwgk222xnvs.us-east-1.rds.amazonaws.com',
+        'USER': 'root',
+        'PASSWORD': '',        # o la contraseña que uses
+        'HOST': 'localhost',
         'PORT': '3306',
     }
 }

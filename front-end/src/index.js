@@ -12,12 +12,11 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import './estilos/personalizado.css';
-
+import "bootstrap-icons/font/bootstrap-icons.css";
 // ✅ Configuración de axios
-axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'http://54.234.221.254:8000/api/';
+axios.defaults.baseURL = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
 axios.defaults.headers.common['Accept'] = 'application/json';
 axios.defaults.withCredentials = true;
-
 
 // Obtener token CSRF desde las cookies
 axios.interceptors.request.use((config) => {
@@ -37,4 +36,3 @@ root.render(
 );
 
 reportWebVitals();
-
