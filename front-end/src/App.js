@@ -10,6 +10,9 @@ import RecuperarContrasena from "./paginas/auth/RecuperarContrasena";      // �
 import RestablecerContrasena from "./paginas/auth/RestablecerContrasena";  // 👈 IMPORTA
 import { AuthProvider, useAuth } from "./contexto/AuthContext";
 
+// 👇 Módulo Usuarios
+import Usuarios from "./paginas/usuarios/Usuarios";
+
 function ProtectedRoute({ children }) {
   const { isAuth, status } = useAuth();
   if (status !== "ready") return null;
@@ -62,6 +65,16 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <PerfilUsuario />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* 👇 NUEVA RUTA PROTEGIDA: Usuarios */}
+            <Route
+              path="/usuarios"
+              element={
+                <ProtectedRoute>
+                  <Usuarios />
                 </ProtectedRoute>
               }
             />
