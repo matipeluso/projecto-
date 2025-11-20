@@ -13,6 +13,12 @@ import { AuthProvider, useAuth } from "./contexto/AuthContext";
 // 👇 Módulo Usuarios
 import Usuarios from "./paginas/usuarios/Usuarios";
 
+// 👇 Módulo PIE
+import RegistroPIE from "./paginas/Pie/RegistroPIE";
+
+// 👇 NUEVO: Módulo Anamnesis
+import Anamnesis from "./paginas/Anamnesis/Anamnesis";
+
 function ProtectedRoute({ children }) {
   const { isAuth, status } = useAuth();
   if (status !== "ready") return null;
@@ -69,12 +75,32 @@ export default function App() {
               }
             />
 
-            {/* 👇 NUEVA RUTA PROTEGIDA: Usuarios */}
+            {/* 👇 RUTA PROTEGIDA: Usuarios */}
             <Route
               path="/usuarios"
               element={
                 <ProtectedRoute>
                   <Usuarios />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* 👇 RUTA PROTEGIDA: Registro PIE */}
+            <Route
+              path="/pie"
+              element={
+                <ProtectedRoute>
+                  <RegistroPIE />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* 👇 NUEVA RUTA PROTEGIDA: Anamnesis */}
+            <Route
+              path="/anamnesis"
+              element={
+                <ProtectedRoute>
+                  <Anamnesis />
                 </ProtectedRoute>
               }
             />
