@@ -1,3 +1,39 @@
+from .models import EvaluacionPsicopedagogica, SubdimensionItem, Subsector, EstrategiaApoyo, ApoyoAdicional
+from .serializers import EvaluacionPsicopedagogicaSerializer, SubdimensionItemSerializer, SubsectorSerializer, EstrategiaApoyoSerializer, ApoyoAdicionalSerializer
+from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
+from django.http import HttpResponse
+from xhtml2pdf import pisa
+
+
+# --- FLUJO EVALUACIÓN DE SALUD MINEDUC ---
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from .models import AntecedenteSalud
+from .serializers import AntecedenteSaludSerializer
+
+class AntecedenteSaludViewSet(viewsets.ModelViewSet):
+    queryset = AntecedenteSalud.objects.all()
+    serializer_class = AntecedenteSaludSerializer
+
+    def get_queryset(self):
+        anamnesis_id = self.request.query_params.get('anamnesis')
+        if anamnesis_id:
+            return self.queryset.filter(anamnesis_id=anamnesis_id)
+        return self.queryset
+
+    @action(detail=True, methods=['get'])
+    def pdf(self, request, pk=None):
+        from django.shortcuts import get_object_or_404
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from xhtml2pdf import pisa
+        obj = get_object_or_404(AntecedenteSalud, pk=pk)
+        html = render_to_string('core/salud_pdf.html', {'salud': obj})
+        response = HttpResponse(content_type='application/pdf')
+        pisa.CreatePDF(html, dest=response)
+        return response
 from rest_framework import viewsets
 from .models import *
 from .serializers import *
@@ -33,10 +69,6 @@ class ApoderadoViewSet(viewsets.ModelViewSet):
 class EstudianteViewSet(viewsets.ModelViewSet):
     queryset = Estudiante.objects.all()
     serializer_class = EstudianteSerializer
-
-class EvaluacionIntegralViewSet(viewsets.ModelViewSet):
-    queryset = EvaluacionIntegral.objects.all()
-    serializer_class = EvaluacionIntegralSerializer
 
 class AnamnesisViewSet(viewsets.ModelViewSet):
     queryset = Anamnesis.objects.all()
@@ -199,3 +231,64 @@ def generar_registro_pie_pdf(request, registro_id):
         return Response({"error": "Registro PIE no encontrado"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class SubdimensionAreaViewSet(viewsets.ModelViewSet):
+    queryset = SubdimensionArea.objects.all()
+    serializer_class = SubdimensionAreaSerializer
+
+
+
+
+class TrayectoriaEscolarViewSet(viewsets.ModelViewSet):
+    queryset = TrayectoriaEscolar.objects.all()
+    serializer_class = TrayectoriaEscolarSerializer
+
+
+
+class SituacionEscolarViewSet(viewsets.ModelViewSet):
+    queryset = SituacionEscolar.objects.all()
+    serializer_class = SituacionEscolarSerializer
+
+
+
+class ObservacionItemViewSet(viewsets.ModelViewSet):
+    queryset = ObservacionItem.objects.all()
+    serializer_class = ObservacionItemSerializer
+
+
+
+class ObservacionEscolarViewSet(viewsets.ModelViewSet):
+    queryset = ObservacionEscolar.objects.all().order_by('-fecha')
+    serializer_class = ObservacionEscolarSerializer
+
+
+
+class EvaluacionPsicopedagogicaViewSet(viewsets.ModelViewSet):
+    queryset = EvaluacionPsicopedagogica.objects.all()
+    serializer_class = EvaluacionPsicopedagogicaSerializer
+
+    @action(detail=True, methods=['get'])
+    def pdf(self, request, pk=None):
+        evaluacion = get_object_or_404(EvaluacionPsicopedagogica, pk=pk)
+        html = render_to_string('core/psico_pdf.html', {'evaluacion': evaluacion})
+        response = HttpResponse(content_type='application/pdf')
+        pisa.CreatePDF(html, dest=response)
+        return response
+
+class SubdimensionItemViewSet(viewsets.ModelViewSet):
+    queryset = SubdimensionItem.objects.all()
+    serializer_class = SubdimensionItemSerializer
+
+class SubsectorViewSet(viewsets.ModelViewSet):
+    queryset = Subsector.objects.all()
+    serializer_class = SubsectorSerializer
+
+class EstrategiaApoyoViewSet(viewsets.ModelViewSet):
+    queryset = EstrategiaApoyo.objects.all()
+    serializer_class = EstrategiaApoyoSerializer
+
+class ApoyoAdicionalViewSet(viewsets.ModelViewSet):
+    queryset = ApoyoAdicional.objects.all()
+    serializer_class = ApoyoAdicionalSerializer

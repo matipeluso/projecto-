@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import (
     Usuario, Especialidad, Curso, Apoderado, Estudiante,
-    EvaluacionIntegral, Anamnesis, Informante, Entrevistador, AntecedenteSalud,
+    Anamnesis, Informante, Entrevistador, AntecedenteSalud,
     EvaluacionPsicopedagogica, SubdimensionItem, Subsector,
     EstrategiaApoyo, ApoyoAdicional,
     EvaluacionSalud,
@@ -53,7 +53,7 @@ modelos_simples = [
     Curso,
     Apoderado,
     Estudiante,
-    EvaluacionIntegral,
+
     Anamnesis,
     Informante,
     Entrevistador,

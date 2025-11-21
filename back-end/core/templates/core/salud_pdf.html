@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Formulario Único de Evaluación de Salud MINEDUC</title>
+    <style>
+        body { font-family: Arial, sans-serif; font-size: 12px; }
+        .titulo { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 10px; }
+        .seccion { margin-bottom: 12px; }
+        .label { font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+        td, th { border: 1px solid #333; padding: 4px; }
+    </style>
+</head>
+<body>
+    <div class="titulo">FORMULARIO ÚNICO DE EVALUACIÓN DE SALUD<br>MINEDUC - Decreto 170</div>
+    <div class="seccion">
+        <span class="label">1. Identificación del estudiante:</span><br>
+        Nombre: {{ salud.anamnesis.estudiante.nombres_apellidos }}<br>
+        RUN: {{ salud.anamnesis.estudiante.run }}<br>
+        Curso: {{ salud.anamnesis.estudiante.curso.nombre }}<br>
+        Establecimiento: {{ salud.anamnesis.estudiante.establecimiento.nombre }}
+    </div>
+    <div class="seccion">
+        <span class="label">2. Motivo de consulta:</span> {{ salud.motivo_consulta }}
+    </div>
+    <div class="seccion">
+        <span class="label">3. Identificación del profesional:</span><br>
+        Nombre: {{ salud.profesional.first_name }} {{ salud.profesional.last_name }}<br>
+        Especialidad: {{ salud.especialidad }}<br>
+        Procedencia: {{ salud.procedencia }}<br>
+        Contacto: {{ salud.contacto }}
+    </div>
+    <div class="seccion">
+        <span class="label">4. Examen del estado general:</span><br>
+        Fecha evaluación: {{ salud.fecha_evaluacion }}<br>
+        Fecha reevaluación: {{ salud.fecha_reevaluacion }}<br>
+        Estado de salud general: {{ salud.estado_salud_general }}
+    </div>
+    <div class="seccion">
+        <span class="label">5. Antecedentes de salud:</span>
+        <table>
+            <tr>
+                <td>Diagnóstico previo</td>
+                <td>{{ salud.diagnostico_prev }}</td>
+            </tr>
+            <tr>
+                <td>Tipo de parto</td>
+                <td>{{ salud.tipo_parto }}</td>
+            </tr>
+            <tr>
+                <td>Asistencia parto</td>
+                <td>{% if salud.asistencia_parto %}Sí{% else %}No{% endif %}</td>
+            </tr>
+            <tr>
+                <td>Peso</td>
+                <td>{{ salud.peso }} kg</td>
+            </tr>
+            <tr>
+                <td>Talla</td>
+                <td>{{ salud.talla }} cm</td>
+            </tr>
+            <tr>
+                <td>Antecedentes embarazo</td>
+                <td>{{ salud.antecedentes_embarazo }}</td>
+            </tr>
+            <tr>
+                <td>Hospitalizaciones</td>
+                <td>{% if salud.hospitalizaciones %}Sí{% else %}No{% endif %}</td>
+            </tr>
+            <tr>
+                <td>Vacunas al día</td>
+                <td>{% if salud.vacunas %}Sí{% else %}No{% endif %}</td>
+            </tr>
+            <tr>
+                <td>Observaciones</td>
+                <td>{{ salud.observaciones }}</td>
+            </tr>
+        </table>
+    </div>
+    <div class="seccion">
+        <span class="label">6. Diagnóstico:</span><br>
+        {{ salud.descripcion_diagnostico }}
+    </div>
+    <div class="seccion">
+        <span class="label">7. Indicaciones:</span><br>
+        {{ salud.indicaciones }}
+    </div>
+</body>
+</html>

@@ -105,35 +105,15 @@ class Estudiante(models.Model):
         return self.nombres_apellidos
 
 # ================================================================
-# 3. EVALUACIÓN INTEGRAL
-# ================================================================
-
-class EvaluacionIntegral(models.Model):
-    estudiante = models.ForeignKey(Estudiante, on_delete=models.CASCADE, related_name='evaluaciones_integrales')
-    fecha_inicio = models.DateField(blank=True, null=True)
-    fecha_cierre = models.DateField(blank=True, null=True)
-    estado = models.CharField(
-        max_length=20,
-        choices=[('En proceso', 'En proceso'), ('Finalizada', 'Finalizada')],
-        default='En proceso'
-    )
-    observaciones = models.TextField(blank=True, null=True)
-
-    def __str__(self):
-        return f"Evaluación de {self.estudiante} ({self.estado})"
-
-# ================================================================
 # 4. ANAMNESIS
 # ================================================================
 class Anamnesis(models.Model):
-    evaluacion_integral = models.ForeignKey(EvaluacionIntegral, on_delete=models.CASCADE, related_name='anamnesis')
+    estudiante = models.ForeignKey(Estudiante, on_delete=models.CASCADE, related_name='anamnesis')   
     fecha = models.DateField(blank=True, null=True)
     definicion_problema = models.TextField(blank=True, null=True)
     observaciones_generales = models.TextField(blank=True, null=True)
     pdf_generado = models.FileField(upload_to='anamnesis_pdfs/', blank=True, null=True)
 
-    def __str__(self):
-        return f"Anamnesis de {self.evaluacion_integral.estudiante}"
 
 
 class Informante(models.Model):
@@ -158,6 +138,16 @@ class Entrevistador(models.Model):
 
 class AntecedenteSalud(models.Model):
     anamnesis = models.ForeignKey(Anamnesis, on_delete=models.CASCADE, related_name='antecedentes_salud')
+    motivo_consulta = models.CharField(max_length=255, blank=True, null=True)
+    profesional = models.ForeignKey('Usuario', on_delete=models.SET_NULL, null=True, blank=True, related_name='antecedentes_salud')
+    especialidad = models.CharField(max_length=100, blank=True, null=True)
+    procedencia = models.CharField(max_length=100, blank=True, null=True)
+    contacto = models.CharField(max_length=100, blank=True, null=True)
+    fecha_evaluacion = models.DateField(blank=True, null=True)
+    fecha_reevaluacion = models.DateField(blank=True, null=True)
+    estado_salud_general = models.TextField(blank=True, null=True)
+    descripcion_diagnostico = models.TextField(blank=True, null=True)
+    indicaciones = models.TextField(blank=True, null=True)
     diagnostico_prev = models.CharField(max_length=255, blank=True, null=True)
     tipo_parto = models.CharField(max_length=50, blank=True, null=True)
     asistencia_parto = models.BooleanField(default=False)
@@ -168,18 +158,20 @@ class AntecedenteSalud(models.Model):
     vacunas = models.BooleanField(default=True)
     observaciones = models.TextField(blank=True, null=True)
 
+    def __str__(self):
+        return f"Salud de {self.anamnesis.estudiante.nombres_apellidos} ({self.fecha_evaluacion})"
+
 # ================================================================
 # 5. EVALUACIÓN PSICOPEDAGÓGICA
 # ================================================================
 
 class EvaluacionPsicopedagogica(models.Model):
-    evaluacion_integral = models.ForeignKey(EvaluacionIntegral, on_delete=models.CASCADE, related_name='evaluacion_psicopedagogica')
+    Estudiante = models.ForeignKey(Estudiante, on_delete=models.CASCADE, related_name='evaluaciones_psicopedagogicas')
     evaluador = models.CharField(max_length=100, blank=True, null=True)
     fecha = models.DateField(blank=True, null=True)
     observaciones = models.TextField(blank=True, null=True)
 
-    def __str__(self):
-        return f"Evaluación Psico de {self.evaluacion_integral.estudiante}"
+
 
 
 class SubdimensionItem(models.Model):
@@ -206,20 +198,44 @@ class EstrategiaApoyo(models.Model):
     descripcion = models.TextField()
     aplicada = models.BooleanField(default=False)
     exitosa = models.BooleanField(default=False)
+    numero = models.PositiveSmallIntegerField()
 
 
 class ApoyoAdicional(models.Model):
-    evaluacion = models.ForeignKey(EvaluacionPsicopedagogica, on_delete=models.CASCADE, related_name='apoyos_adicionales')
-    tipo = models.CharField(max_length=20, choices=[('interno', 'Interno'), ('externo', 'Externo')])
-    profesional = models.CharField(max_length=100)
-    recibido = models.BooleanField(default=False)
+    TIPO_CHOICES = [
+        ('interno', 'Interno'),
+        ('externo', 'Externo'),
+    ]
+
+    OPCIONES_APOYO = [
+        ('grupo_diferencial', 'Grupo diferencial'),
+        ('aula_recursos', 'Aula de recursos'),
+        ('profesionales_apoyo', 'Atención de profesionales de apoyo'),
+        ('adaptaciones_curriculares', 'Adaptaciones curriculares significativas'),
+        ('psicologo', 'Psicólogo'),
+        ('fonoaudiologo', 'Fonoaudiólogo'),
+        ('neurologo', 'Neurólogo'),
+        ('psicopedagogo', 'Psicopedagogo / Educ. Diferencial'),
+        ('otros', 'Otros'),  # Para activar un campo extra
+    ]
+
+    evaluacion = models.ForeignKey(
+        EvaluacionPsicopedagogica,
+        on_delete=models.CASCADE,
+        related_name='apoyos_adicionales'
+    )
+
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)  # interno / externo
+    apoyo = models.CharField(max_length=50, choices=OPCIONES_APOYO)
+    recibido = models.BooleanField(default=False)  # Sí / No
+    descripcion_extra = models.CharField(max_length=255, blank=True, null=True)  # Para "Otros"
 
 # ================================================================
 # 6. EVALUACIÓN DE SALUD
 # ================================================================
 
 class EvaluacionSalud(models.Model):
-    evaluacion_integral = models.ForeignKey(EvaluacionIntegral, on_delete=models.CASCADE, related_name='evaluacion_salud')
+    estudiante = models.ForeignKey(Estudiante, on_delete=models.CASCADE, related_name='evaluaciones_salud')
     fecha_evaluacion = models.DateField(blank=True, null=True)
     fecha_reevaluacion = models.DateField(blank=True, null=True)
     motivo_consulta = models.CharField(max_length=255)
@@ -236,16 +252,13 @@ class EvaluacionSalud(models.Model):
 # ================================================================
 
 class InformeFamilia(models.Model):
-    evaluacion_integral = models.ForeignKey(EvaluacionIntegral, on_delete=models.CASCADE, related_name='informes_familia')
+    Estudiante = models.ForeignKey(Estudiante, on_delete=models.CASCADE, related_name='informes_familia')
     fecha_entrega = models.DateField()
     motivo = models.CharField(max_length=50, choices=[('Ingreso', 'Ingreso'), ('Reevaluación', 'Reevaluación')])
     diagnostico_nee = models.TextField(blank=True, null=True)
     trabajo_colaborativo = models.TextField(blank=True, null=True)
     apoyos_requeridos_hogar = models.TextField(blank=True, null=True)
     acuerdos_compromisos = models.TextField(blank=True, null=True)
-
-    def __str__(self):
-        return f"Informe Familia de {self.evaluacion_integral.estudiante}"
 
 
 class InformeFamiliaInstrumento(models.Model):
@@ -450,3 +463,276 @@ class EvaluacionPIE(models.Model):
 
     def __str__(self):
         return f"Evaluación PIE - {self.registro.curso.nombre}"
+
+
+
+# Campos adicionales sugeridos según PDF
+direccion = models.CharField(max_length=200, blank=True, null=True)
+telefono = models.CharField(max_length=20, blank=True, null=True)
+
+via_comunicacion = models.CharField(
+    max_length=20,
+    choices=[
+        ('oral', 'Oral'),
+        ('senas', 'Lengua de Señas'),
+        ('otra', 'Otra'),
+    ],
+    blank=True,
+    null=True
+)
+
+# Dominio de lengua (Estructura JSON para comprende / habla / lee / escribe)
+dominio_lengua_origen = models.JSONField(blank=True, null=True)
+dominio_lengua_uso = models.JSONField(blank=True, null=True)
+
+
+
+class TrayectoriaEscolar(models.Model):
+    estudiante = models.OneToOneField(
+        Estudiante,
+        on_delete=models.CASCADE,
+        related_name='trayectoria'
+    )
+
+    asistio_jardin = models.BooleanField(default=False)
+    ha_repetido = models.BooleanField(default=False)
+    cursos_repetidos = models.CharField(max_length=100, blank=True, null=True)
+    
+    numero_colegios = models.PositiveIntegerField(default=1)
+
+    modalidad = models.CharField(
+        max_length=20,
+        choices=[
+            ('Regular', 'Regular'),
+            ('Especial', 'Especial'),
+            ('Tecnica', 'Técnica'),
+        ],
+        blank=True,
+        null=True
+    )
+
+    tiene_amigos = models.BooleanField(default=True)
+    motivo_cambios = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Trayectoria de {self.estudiante}"
+
+
+
+class SituacionEscolar(models.Model):
+    estudiante = models.OneToOneField(
+        Estudiante,
+        on_delete=models.CASCADE,
+        related_name='situacion_escolar'
+    )
+
+    asiste_regularmente = models.BooleanField(default=True)
+    asiste_con_agrado = models.BooleanField(default=True)
+    apoyo_familiar_tareas = models.BooleanField(default=False)
+
+    aspectos_destacados = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Situación Escolar de {self.estudiante}"
+
+
+
+class SubdimensionArea(models.Model):
+    nombre = models.CharField(max_length=200)
+
+    def __str__(self):
+        return self.nombre
+
+
+
+class SubdimensionItem(models.Model):
+    evaluacion = models.ForeignKey(EvaluacionPsicopedagogica, on_delete=models.CASCADE, related_name='items')
+    area = models.ForeignKey(SubdimensionArea, on_delete=models.CASCADE, related_name='items')
+
+    descripcion = models.TextField()
+    valor = models.PositiveSmallIntegerField()  # 1, 2, 3, 4, 0
+
+    def __str__(self):
+        return f"{self.area.nombre} - {self.valor}"
+
+
+
+class ObservacionEscolar(models.Model):
+    evaluacion = models.ForeignKey(
+        EvaluacionPsicopedagogica,
+        on_delete=models.CASCADE,
+        related_name='observaciones_escolares'
+    )
+
+    fecha = models.DateField(blank=True, null=True)
+
+    lugar = models.CharField(
+        max_length=50,
+        choices=[
+            ('aula', 'Aula'),
+            ('patio', 'Patio'),
+            ('recursos', 'Aula de recursos'),
+            ('otro', 'Otro'),
+        ],
+        blank=True,
+        null=True
+    )
+
+    nombre_evaluador = models.CharField(max_length=120)
+    rut_evaluador = models.CharField(max_length=20, blank=True, null=True)
+    rol_cargo = models.CharField(max_length=100, blank=True, null=True)
+
+
+
+class ObservacionItem(models.Model):
+    observacion = models.ForeignKey(
+        ObservacionEscolar,
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+
+    categoria = models.CharField(
+        max_length=50,
+        choices=[
+            ('academico', 'Antecedentes académicos'),
+            ('social', 'Antecedentes sociales y comunicativos'),
+        ]
+    )
+
+    descripcion = models.TextField()
+    valor = models.PositiveSmallIntegerField()  # 1,2,3,4,0
+
+    def __str__(self):
+        return f"{self.categoria} - {self.valor}"
+
+
+
+
+class EvaluacionAmbienteEscolar(models.Model):
+    estudiante = models.ForeignKey(Estudiante, on_delete=models.CASCADE, related_name="evaluaciones_ambiente")
+    fecha = models.DateField()
+    evaluador = models.CharField(max_length=100)
+    rut_evaluador = models.CharField(max_length=12)
+    cargo = models.CharField(max_length=100)
+    especialidad = models.CharField(max_length=100, blank=True, null=True)
+    lugar_observacion = models.CharField(max_length=100)
+    
+    def __str__(self):
+        return f"Ambiente escolar de {self.estudiante}"
+
+
+
+class ItemAmbienteEscolar(models.Model):
+    evaluacion = models.ForeignKey(EvaluacionAmbienteEscolar, on_delete=models.CASCADE, related_name="items")
+    numero = models.PositiveSmallIntegerField()
+    categoria = models.CharField(max_length=50)  # academicos / sociales
+    descripcion = models.TextField()
+    valor = models.PositiveSmallIntegerField(choices=[(0,"0"), (1,"1"), (2,"2"), (3,"3"), (4,"4")])
+
+    def __str__(self):
+        return f"Item {self.numero} ({self.categoria})"
+
+
+
+class ObservacionAmbiente(models.Model):
+    evaluacion = models.ForeignKey(
+        EvaluacionPsicopedagogica,
+        on_delete=models.CASCADE,
+        related_name="observaciones_ambiente"
+    )
+
+    item = models.PositiveIntegerField()  # 1..20
+    descripcion = models.TextField()
+    valor = models.IntegerField(choices=[
+        (1, "Siempre"),
+        (2, "Generalmente"),
+        (3, "Ocasionalmente"),
+        (4, "Nunca"),
+        (0, "No observado"),
+    ])
+
+# ================================================================
+# 8. FORMULARIO ÚNICO DE EVALUACIÓN DE SALUD MINEDUC
+# ================================================================
+
+class FormularioEvaluacionSalud(models.Model):
+    estudiante = models.ForeignKey(Estudiante, on_delete=models.CASCADE, related_name="formularios_evaluacion_salud")
+    fecha_creacion = models.DateField(auto_now_add=True)
+    motivo_consulta = models.TextField()
+    diagnostico = models.TextField(blank=True, null=True)
+    estado_salud_general = models.TextField(blank=True, null=True)
+    indicaciones = models.TextField(blank=True, null=True)
+    profesional = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name='formularios_evaluacion_salud')
+    especialidad = models.CharField(max_length=100, blank=True, null=True)
+    procedencia = models.CharField(max_length=100, blank=True, null=True)
+    contacto = models.CharField(max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        return f"Formulario de {self.estudiante} - {self.fecha_creacion}"
+
+# Detalle de la evaluación
+class DetalleEvaluacionSalud(models.Model):
+    formulario = models.ForeignKey(FormularioEvaluacionSalud, on_delete=models.CASCADE, related_name="detalles")
+    fecha = models.DateField()
+    peso = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    talla = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    perimetro_cefalico = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
+    frecuencia_cardiaca = models.PositiveIntegerField(blank=True, null=True)
+    frecuencia_respiratoria = models.PositiveIntegerField(blank=True, null=True)
+    temperatura = models.DecimalField(max_digits=4, decimal_places=1, blank=True, null=True)
+    presion_arterial = models.CharField(max_length=7, blank=True, null=True)  # Ej: 120/80
+    observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Detalle {self.fecha} - {self.formulario.estudiante}"
+
+# Antecedentes de salud
+class AntecedentesSaludFormulario(models.Model):
+    formulario = models.ForeignKey(FormularioEvaluacionSalud, on_delete=models.CASCADE, related_name="antecedentes_salud")
+    tipo = models.CharField(max_length=50, choices=[('personal', 'Personal'), ('familiar', 'Familiar')])
+    descripcion = models.TextField()
+
+    def __str__(self):
+        return f"Antecedente {self.tipo} - {self.formulario.estudiante}"
+
+# Evaluación psicológica
+class EvaluacionPsicologica(models.Model):
+    formulario = models.ForeignKey(FormularioEvaluacionSalud, on_delete=models.CASCADE, related_name="evaluaciones_psicologicas")
+    fecha = models.DateField()
+    resultado = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Evaluación psicológica - {self.formulario.estudiante} ({self.fecha})"
+
+# Evaluación de lenguaje
+class EvaluacionLenguaje(models.Model):
+    formulario = models.ForeignKey(FormularioEvaluacionSalud, on_delete=models.CASCADE, related_name="evaluaciones_lenguaje")
+    fecha = models.DateField()
+    resultado = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Evaluación de lenguaje - {self.formulario.estudiante} ({self.fecha})"
+
+# Evaluación neuropsicológica
+class EvaluacionNeuropsicologica(models.Model):
+    formulario = models.ForeignKey(FormularioEvaluacionSalud, on_delete=models.CASCADE, related_name="evaluaciones_neuropsicologicas")
+    fecha = models.DateField()
+    resultado = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Evaluación neuropsicológica - {self.formulario.estudiante} ({self.fecha})"
+
+# Informe de evaluación de salud
+class InformeEvaluacionSalud(models.Model):
+    formulario = models.ForeignKey(FormularioEvaluacionSalud, on_delete=models.CASCADE, related_name="informes_evaluacion_salud")
+    fecha_emision = models.DateField(auto_now_add=True)
+    recomendaciones = models.TextField(blank=True, null=True)
+    derivaciones = models.TextField(blank=True, null=True)
+    observaciones_adicionales = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Informe de evaluación de salud - {self.formulario.estudiante} ({self.fecha_emision})"

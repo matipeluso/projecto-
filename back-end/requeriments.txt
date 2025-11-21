@@ -27,3 +27,11 @@ botocore==1.35.5
 
 # ======== Otros ========
 charset-normalizer==3.3.2
+
+
+
+django
+djangorestframework
+django-cors-headers
+reportlab
+mysqlclient

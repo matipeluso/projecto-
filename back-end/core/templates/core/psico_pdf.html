@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Evaluación Psicopedagógica</title>
+    <style>
+        body { font-family: Arial, sans-serif; font-size: 12px; }
+        .titulo { font-size: 18px; font-weight: bold; text-align: center; margin-bottom: 10px; }
+        .seccion { margin-bottom: 12px; }
+        .label { font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+        td, th { border: 1px solid #333; padding: 4px; }
+        .logo { width: 120px; }
+    </style>
+</head>
+<body>
+    <div class="titulo">Evaluación Psicopedagógica</div>
+    <div class="seccion">
+        <span class="label">Estudiante:</span> {{ evaluacion.estudiante.nombres_apellidos }}<br>
+        <span class="label">Curso:</span> {{ evaluacion.estudiante.curso.nombre }}<br>
+        <span class="label">Fecha:</span> {{ evaluacion.fecha }}<br>
+        <span class="label">Evaluador:</span> {{ evaluacion.evaluador }}
+    </div>
+    <div class="seccion">
+        <span class="label">Observaciones:</span> {{ evaluacion.observaciones }}
+    </div>
+    <div class="seccion">
+        <span class="label">Subdimensiones:</span>
+        <table>
+            <tr>
+                <th>Área</th>
+                <th>Descripción</th>
+                <th>Valor</th>
+            </tr>
+            {% for item in evaluacion.items.all %}
+            <tr>
+                <td>{{ item.area }}</td>
+                <td>{{ item.descripcion }}</td>
+                <td>{{ item.valor }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="seccion">
+        <span class="label">Subsectores:</span>
+        <table>
+            <tr>
+                <th>Subsector</th>
+                <th>Tipo</th>
+            </tr>
+            {% for sub in evaluacion.subsectores.all %}
+            <tr>
+                <td>{{ sub.subsector }}</td>
+                <td>{{ sub.tipo }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="seccion">
+        <span class="label">Estrategias de Apoyo:</span>
+        <table>
+            <tr>
+                <th>Descripción</th>
+                <th>Aplicada</th>
+                <th>Exitosa</th>
+                <th>Número</th>
+            </tr>
+            {% for est in evaluacion.estrategias_apoyo.all %}
+            <tr>
+                <td>{{ est.descripcion }}</td>
+                <td>{% if est.aplicada %}Sí{% else %}No{% endif %}</td>
+                <td>{% if est.exitosa %}Sí{% else %}No{% endif %}</td>
+                <td>{{ est.numero }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="seccion">
+        <span class="label">Apoyos Adicionales:</span>
+        <table>
+            <tr>
+                <th>Tipo</th>
+                <th>Apoyo</th>
+                <th>Recibido</th>
+                <th>Descripción Extra</th>
+            </tr>
+            {% for ap in evaluacion.apoyos_adicionales.all %}
+            <tr>
+                <td>{{ ap.tipo }}</td>
+                <td>{{ ap.apoyo }}</td>
+                <td>{% if ap.recibido %}Sí{% else %}No{% endif %}</td>
+                <td>{{ ap.descripcion_extra }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>

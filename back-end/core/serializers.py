@@ -1,3 +1,4 @@
+
 from rest_framework import serializers
 from .models import *
 
@@ -53,14 +54,6 @@ class EstudianteSerializer(serializers.ModelSerializer):
         model = Estudiante
         fields = '__all__'
 
-# ================================================================
-# 2. EVALUACIÓN INTEGRAL
-# ================================================================
-
-class EvaluacionIntegralSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EvaluacionIntegral
-        fields = '__all__'
 
 # ================================================================
 # 3. ANAMNESIS
@@ -80,6 +73,13 @@ class AntecedenteSaludSerializer(serializers.ModelSerializer):
     class Meta:
         model = AntecedenteSalud
         fields = '__all__'
+
+    def validate(self, data):
+        if data.get('peso') is not None and data['peso'] <= 0:
+            raise serializers.ValidationError("El peso debe ser positivo.")
+        if data.get('talla') is not None and data['talla'] <= 0:
+            raise serializers.ValidationError("La talla debe ser positiva.")
+        return data
 
 class AnamnesisSerializer(serializers.ModelSerializer):
     informantes = InformanteSerializer(many=True, read_only=True)
@@ -102,7 +102,8 @@ class SubdimensionItemSerializer(serializers.ModelSerializer):
 class SubsectorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subsector
-        fields = '__all__'
+        fields = ["id", "subsector", "tipo"]
+
 
 class EstrategiaApoyoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -124,6 +125,14 @@ class EvaluacionPsicopedagogicaSerializer(serializers.ModelSerializer):
         model = EvaluacionPsicopedagogica
         fields = '__all__'
 
+    def create(self, validated_data):
+        subsectores_data = validated_data.pop("subsectores", [])
+        evaluacion = EvaluacionPsicopedagogica.objects.create(**validated_data)
+
+        for s in subsectores_data:
+            Subsector.objects.create(evaluacion=evaluacion, **s)
+
+        return evaluacion
 # ================================================================
 # 5. EVALUACIÓN DE SALUD
 # ================================================================
@@ -231,3 +240,138 @@ class RegistroPIESerializer(serializers.ModelSerializer):
     class Meta:
         model = RegistroPIE
         fields = '__all__'
+
+
+
+class SubdimensionAreaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubdimensionArea
+        fields = '__all__'
+
+
+
+
+class TrayectoriaEscolarSerializer(serializers.ModelSerializer):
+    estudiante = EstudianteSerializer(read_only=True)
+    estudiante_id = serializers.PrimaryKeyRelatedField(
+        source='estudiante',
+        queryset=Estudiante.objects.all(),
+        write_only=True
+    )
+
+    class Meta:
+        model = TrayectoriaEscolar
+        fields = '__all__'
+
+
+class SituacionEscolarSerializer(serializers.ModelSerializer):
+    estudiante = EstudianteSerializer(read_only=True)
+    estudiante_id = serializers.PrimaryKeyRelatedField(
+        source='estudiante',
+        queryset=Estudiante.objects.all(),
+        write_only=True
+    )
+
+    class Meta:
+        model = SituacionEscolar
+        fields = '__all__'
+
+
+
+class ObservacionItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ObservacionItem
+        fields = '__all__'
+
+
+class ObservacionEscolarSerializer(serializers.ModelSerializer):
+    items = ObservacionItemSerializer(many=True, read_only=True)
+
+    evaluacion = EvaluacionPsicopedagogicaSerializer(read_only=True)
+    evaluacion_id = serializers.PrimaryKeyRelatedField(
+        source='evaluacion',
+        queryset=EvaluacionPsicopedagogica.objects.all(),
+        write_only=True
+    )
+
+    class Meta:
+        model = ObservacionEscolar
+        fields = '__all__'
+
+
+
+class SubdimensionItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubdimensionItem
+        fields = '__all__'
+
+class SubsectorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subsector
+        fields = '__all__'
+
+class EstrategiaApoyoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EstrategiaApoyo
+        fields = '__all__'
+
+class ApoyoAdicionalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ApoyoAdicional
+        fields = '__all__'
+
+class EvaluacionPsicopedagogicaSerializer(serializers.ModelSerializer):
+    items = SubdimensionItemSerializer(many=True)
+    subsectores = SubsectorSerializer(many=True)
+    estrategias_apoyo = EstrategiaApoyoSerializer(many=True)
+    apoyos_adicionales = ApoyoAdicionalSerializer(many=True)
+    estudiante = serializers.PrimaryKeyRelatedField(queryset=Estudiante.objects.all())
+
+    class Meta:
+        model = EvaluacionPsicopedagogica
+        fields = [
+            'id', 'estudiante', 'evaluador', 'fecha', 'observaciones',
+            'items', 'subsectores', 'estrategias_apoyo', 'apoyos_adicionales'
+        ]
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+        subsectores_data = validated_data.pop('subsectores')
+        estrategias_data = validated_data.pop('estrategias_apoyo')
+        apoyos_data = validated_data.pop('apoyos_adicionales')
+        evaluacion = EvaluacionPsicopedagogica.objects.create(**validated_data)
+        for item in items_data:
+            SubdimensionItem.objects.create(evaluacion=evaluacion, **item)
+        for sub in subsectores_data:
+            Subsector.objects.create(evaluacion=evaluacion, **sub)
+        for est in estrategias_data:
+            EstrategiaApoyo.objects.create(evaluacion=evaluacion, **est)
+        for ap in apoyos_data:
+            ApoyoAdicional.objects.create(evaluacion=evaluacion, **ap)
+        return evaluacion
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items')
+        subsectores_data = validated_data.pop('subsectores')
+        estrategias_data = validated_data.pop('estrategias_apoyo')
+        apoyos_data = validated_data.pop('apoyos_adicionales')
+
+        instance.evaluador = validated_data.get('evaluador', instance.evaluador)
+        instance.fecha = validated_data.get('fecha', instance.fecha)
+        instance.observaciones = validated_data.get('observaciones', instance.observaciones)
+        instance.estudiante = validated_data.get('estudiante', instance.estudiante)
+        instance.save()
+
+        instance.items.all().delete()
+        for item in items_data:
+            SubdimensionItem.objects.create(evaluacion=instance, **item)
+        instance.subsectores.all().delete()
+        for sub in subsectores_data:
+            Subsector.objects.create(evaluacion=instance, **sub)
+        instance.estrategias_apoyo.all().delete()
+        for est in estrategias_data:
+            EstrategiaApoyo.objects.create(evaluacion=instance, **est)
+        instance.apoyos_adicionales.all().delete()
+        for ap in apoyos_data:
+            ApoyoAdicional.objects.create(evaluacion=instance, **ap)
+        return instance
