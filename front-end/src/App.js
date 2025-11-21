@@ -22,9 +22,21 @@ import SaludForm from "./paginas/salud/SaludForm";
 // Contexto de autenticación
 import { AuthProvider, useAuth } from "./contexto/AuthContext";
 
+<<<<<<< HEAD
 // -------------------------------------------------------------
 //  RUTA PROTEGIDA
 // -------------------------------------------------------------
+=======
+// 👇 Módulo Usuarios
+import Usuarios from "./paginas/usuarios/Usuarios";
+
+// 👇 Módulo PIE
+import RegistroPIE from "./paginas/Pie/RegistroPIE";
+
+// 👇 NUEVO: Módulo Anamnesis
+import Anamnesis from "./paginas/Anamnesis/Anamnesis";
+
+>>>>>>> compañero/main
 function ProtectedRoute({ children }) {
   const { isAuth, status } = useAuth();
 
@@ -110,16 +122,26 @@ export default function App() {
               }
             />
 
+<<<<<<< HEAD
             {/* Nueva ruta para el formulario de salud */}
             <Route
               path="/salud"
               element={
                 <ProtectedRoute>
                   <SaludForm />
+=======
+            {/* 👇 RUTA PROTEGIDA: Usuarios */}
+            <Route
+              path="/usuarios"
+              element={
+                <ProtectedRoute>
+                  <Usuarios />
+>>>>>>> compañero/main
                 </ProtectedRoute>
               }
             />
 
+<<<<<<< HEAD
             {/* Rutas protegidas para evaluaciones psicopedagógicas */}
             {/* Página Psicopedagógica - Lista */}
             <Route
@@ -145,11 +167,33 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <EvaluacionPsicoForm />
+=======
+            {/* 👇 RUTA PROTEGIDA: Registro PIE */}
+            <Route
+              path="/pie"
+              element={
+                <ProtectedRoute>
+                  <RegistroPIE />
+>>>>>>> compañero/main
                 </ProtectedRoute>
               }
             />
 
+<<<<<<< HEAD
             {/* Fallback: cualquier ruta inválida vuelve al inicio */}
+=======
+            {/* 👇 NUEVA RUTA PROTEGIDA: Anamnesis */}
+            <Route
+              path="/anamnesis"
+              element={
+                <ProtectedRoute>
+                  <Anamnesis />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Fallback */}
+>>>>>>> compañero/main
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

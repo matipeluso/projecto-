@@ -1,3 +1,4 @@
+// src/componentes/diseno/BarraNavegacion.jsx
 import { NavLink, Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexto/AuthContext";
 
@@ -58,6 +59,46 @@ export default function BarraNavegacion() {
                 Datos Institucional
               </NavLink>
             </li>
+
+            {/* 👉 Link Usuarios, solo si hay sesión */}
+            {isAuth && (
+              <>
+                <li className="nav-item">
+                  <NavLink
+                    to="/usuarios"
+                    className={({ isActive }) =>
+                      "nav-link" + (isActive ? " active fw-semibold" : "")
+                    }
+                  >
+                    Usuarios
+                  </NavLink>
+                </li>
+
+                {/* 👉 Link Registro PIE (ya agregado) */}
+                <li className="nav-item">
+                  <NavLink
+                    to="/pie"
+                    className={({ isActive }) =>
+                      "nav-link" + (isActive ? " active fw-semibold" : "")
+                    }
+                  >
+                    Registro PIE
+                  </NavLink>
+                </li>
+
+                {/* 👉 NUEVO: Link Anamnesis */}
+                <li className="nav-item">
+                  <NavLink
+                    to="/anamnesis"
+                    className={({ isActive }) =>
+                      "nav-link" + (isActive ? " active fw-semibold" : "")
+                    }
+                  >
+                    Anamnesis
+                  </NavLink>
+                </li>
+              </>
+            )}
           </ul>
 
           {/* Derecha */}

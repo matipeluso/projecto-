@@ -175,3 +175,4 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'gestioncontra12@gmail.com'          # 👉 cambia esto
 EMAIL_HOST_PASSWORD = 'xwmq hsmc rmmw mbuz'  # 👉 clave de aplicación, no tu clave normal
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
