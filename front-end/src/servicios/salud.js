@@ -1,23 +1,15 @@
-import axios from 'axios';
+import api from "./api";
 
-const API_URL = '/api/salud/';
+const ANTECEDENTES_URL = "/antecedentes-salud/";
+const EVALUACIONES_URL = "/evaluaciones-salud/";
 
-export const getAntecedenteSalud = (anamnesisId) => {
-  return axios.get(API_URL, { params: { anamnesis: anamnesisId } });
-};
+export const listarAntecedentesSalud = (params = {}) => api.get(ANTECEDENTES_URL, { params });
+export const getAntecedenteSalud = (id) => api.get(`${ANTECEDENTES_URL}${id}/`);
+export const crearAntecedenteSalud = (data) => api.post(ANTECEDENTES_URL, data);
+export const actualizarAntecedenteSalud = (id, data) => api.patch(`${ANTECEDENTES_URL}${id}/`, data);
+export const eliminarAntecedenteSalud = (id) => api.delete(`${ANTECEDENTES_URL}${id}/`);
 
-export const crearAntecedenteSalud = (data) => {
-  return axios.post(API_URL, data);
-};
-
-export const actualizarAntecedenteSalud = (id, data) => {
-  return axios.put(`${API_URL}${id}/`, data);
-};
-
-export const eliminarAntecedenteSalud = (id) => {
-  return axios.delete(`${API_URL}${id}/`);
-};
-
-export const obtenerPDFSalud = (id) => {
-  return axios.get(`${API_URL}${id}/pdf/`, { responseType: 'blob' });
-};
+export const listarEvaluacionesSalud = (params = {}) => api.get(EVALUACIONES_URL, { params });
+export const crearEvaluacionSalud = (data) => api.post(EVALUACIONES_URL, data);
+export const actualizarEvaluacionSalud = (id, data) => api.patch(`${EVALUACIONES_URL}${id}/`, data);
+export const eliminarEvaluacionSalud = (id) => api.delete(`${EVALUACIONES_URL}${id}/`);

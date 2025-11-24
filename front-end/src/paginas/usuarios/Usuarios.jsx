@@ -1,6 +1,13 @@
 // src/paginas/usuarios/Usuarios.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import api from "../../servicios/api";
+import { toast } from "react-toastify";
+import api from '../../servicios/api';
+import {
+  getUsuarios,
+  crearUsuario as crearUsuarioServicio,
+  actualizarUsuario as actualizarUsuarioServicio,
+  eliminarUsuario as eliminarUsuarioServicio,
+} from "../../servicios/usuarios";
 
 // Reutilizables
 import Buscar from "../../componentes/interfaz/Buscar";
@@ -24,10 +31,11 @@ export default function Usuarios() {
     setCargando(true);
     setError("");
     try {
-      const { data } = await api.get("/api/usuarios/");
+      const { data } = await getUsuarios();
       setUsuarios(Array.isArray(data) ? data : (data?.results ?? []));
     } catch (e) {
       setError("No se pudo cargar la lista de usuarios.");
+      toast.error("No se pudo cargar la lista de usuarios.");
     } finally {
       setCargando(false);
     }
@@ -37,8 +45,8 @@ export default function Usuarios() {
     setCargandoCombos(true);
     try {
       const [esp, est] = await Promise.allSettled([
-        api.get("/api/especialidades/"),
-        api.get("/api/establecimientos/"),
+        api.get("/especialidades/"),
+        api.get("/establecimientos/"),
       ]);
 
       if (esp.status === "fulfilled") {
@@ -68,6 +76,8 @@ export default function Usuarios() {
       (u.first_name || "").toLowerCase().includes(q) ||
       (u.last_name || "").toLowerCase().includes(q) ||
       (u.email || "").toLowerCase().includes(q) ||
+      (u.rut || "").toLowerCase().includes(q) ||
+      (u.cargo || "").toLowerCase().includes(q) ||
       (u.especialidad?.nombre || "").toLowerCase().includes(q)
     );
   }, [usuarios, busqueda]);
@@ -89,36 +99,48 @@ export default function Usuarios() {
     label: es.nombre,
   }));
 
+  const opcionesEspecialidadSelect = [
+    { value: "", label: opcionesEspecialidades.length ? "Seleccione especialidad" : "Sin especialidades" },
+    ...opcionesEspecialidades,
+  ];
+  const opcionesEstablecimientoSelect = [
+    { value: "", label: opcionesEstablecimientos.length ? "Seleccione establecimiento" : "Sin establecimientos" },
+    ...opcionesEstablecimientos,
+  ];
+
   // ---------- Configuración de campos ----------
   function obtenerCamposUsuario() {
     const comunes = [
       { name: "username", label: "Usuario", required: true, col: "col-md-4" },
-      { name: "first_name", label: "Nombre", col: "col-md-4" },
-      { name: "last_name", label: "Apellidos", col: "col-md-4" },
+      { name: "first_name", label: "Nombre", required: true, col: "col-md-4" },
+      { name: "last_name", label: "Apellidos", required: true, col: "col-md-4" },
 
-      { name: "email", label: "Email", required: true, col: "col-md-6" },
-      { name: "telefono", label: "Teléfono", col: "col-md-3" },
+      { name: "email", label: "Email", required: true, col: "col-md-4" },
+      { name: "telefono", label: "Teléfono", col: "col-md-2" },
+      { name: "rut", label: "RUT", col: "col-md-3", placeholder: "12.345.678-9" },
+      { name: "cargo", label: "Cargo / Rol", col: "col-md-3" },
       {
-        name: "tipo", label: "Tipo", type: "select", col: "col-md-3",
+        name: "tipo", label: "Tipo", type: "select", col: "col-md-2",
         options: [
           { value: "Interno", label: "Interno" },
           { value: "Externo", label: "Externo" },
+          { value: "Sostenedor", label: "Sostenedor" },
         ],
       },
     ];
 
-    if (opcionesEspecialidades.length > 0) {
-      comunes.push({
-        name: "especialidad_id", label: "Especialidad", type: "select", col: "col-md-6",
-        options: opcionesEspecialidades,
-      });
-    }
-    if (opcionesEstablecimientos.length > 0) {
-      comunes.push({
-        name: "establecimiento", label: "Establecimiento", type: "select", col: "col-md-6",
-        options: opcionesEstablecimientos,
-      });
-    }
+    comunes.push({
+      name: "especialidad_id", label: "Especialidad", type: "select", col: "col-md-6",
+      options: opcionesEspecialidadSelect,
+      disabled: opcionesEspecialidades.length === 0,
+      required: opcionesEspecialidades.length > 0,
+    });
+    comunes.push({
+      name: "establecimiento_id", label: "Establecimiento", type: "select", col: "col-md-6",
+      options: opcionesEstablecimientoSelect,
+      disabled: opcionesEstablecimientos.length === 0,
+      required: opcionesEstablecimientos.length > 0,
+    });
 
     // Booleanos como selects (Sí/No)
     comunes.push(
@@ -152,8 +174,13 @@ export default function Usuarios() {
 
     // vacíos => null / eliminar
     if (out.telefono === "") out.telefono = null;
+    if (out.rut === "") out.rut = null;
+    if (out.rut) out.rut = out.rut.trim();
+    if (out.cargo === "") out.cargo = null;
+    if (out.cargo) out.cargo = out.cargo.trim();
     if (out.especialidad_id === "") out.especialidad_id = null;
-    if (out.establecimiento === "") delete out.establecimiento;
+    if (out.establecimiento_id === "") out.establecimiento_id = null;
+    if (out.establecimiento !== undefined) delete out.establecimiento;
 
     // booleans desde selects "true"|"false" o boolean ya
     if (out.is_active !== undefined) out.is_active = out.is_active === "true" || out.is_active === true;
@@ -164,7 +191,7 @@ export default function Usuarios() {
 
     // Por seguridad, casteamos ids a string (DRF soporta numérico/str numerable)
     if (out.especialidad_id != null) out.especialidad_id = String(out.especialidad_id);
-    if (out.establecimiento != null) out.establecimiento = String(out.establecimiento);
+    if (out.establecimiento_id != null) out.establecimiento_id = String(out.establecimiento_id);
 
     return out;
   }
@@ -172,27 +199,43 @@ export default function Usuarios() {
   // ---------- CRUD ----------
   async function crearUsuario(payload) {
     const cuerpo = transformarValoresUsuario(payload);
-    return api.post("/api/usuarios/", cuerpo).then((res) => {
-      cargarUsuarios();
-      return res;
-    });
+    return crearUsuarioServicio(cuerpo)
+      .then((res) => {
+        toast.success("Usuario creado correctamente.");
+        cargarUsuarios();
+        return res;
+      })
+      .catch((err) => {
+        const msg = err.response?.data?.detail || err.response?.data?.message || "No se pudo crear el usuario.";
+        toast.error(msg);
+        throw err;
+      });
   }
 
   async function actualizarUsuario(id, payload) {
     const cuerpo = transformarValoresUsuario(payload);
-    return api.patch(`/api/usuarios/${id}/`, cuerpo).then((res) => {
-      cargarUsuarios();
-      return res;
-    });
+    return actualizarUsuarioServicio(id, cuerpo)
+      .then((res) => {
+        toast.success("Usuario actualizado.");
+        cargarUsuarios();
+        return res;
+      })
+      .catch((err) => {
+        const msg = err.response?.data?.detail || err.response?.data?.message || "No se pudo actualizar el usuario.";
+        toast.error(msg);
+        throw err;
+      });
   }
 
   async function eliminarUsuario(id) {
     if (!window.confirm("¿Eliminar este usuario? Esta acción no se puede deshacer.")) return;
     try {
-      await api.delete(`/api/usuarios/${id}/`);
+      await eliminarUsuarioServicio(id);
       setUsuarios((prev) => prev.filter((u) => u.id !== id));
-    } catch {
-      alert("No se pudo eliminar el usuario.");
+      toast.success("Usuario eliminado.");
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.response?.data?.message || "No se pudo eliminar el usuario.";
+      toast.error(msg);
     }
   }
 
@@ -200,8 +243,10 @@ export default function Usuarios() {
   function prepararRegistroParaEditar(u) {
     return {
       ...u,
+      rut: u.rut ?? "",
+      cargo: u.cargo ?? "",
       especialidad_id: u.especialidad?.id ?? "",
-      establecimiento: u.establecimiento?.id ?? u.establecimiento ?? "",
+      establecimiento_id: u.establecimiento?.id ?? u.establecimiento ?? "",
       is_active: u.is_active ? "true" : "false",
       is_staff: u.is_staff ? "true" : "false",
       password: "", // no editamos password aquí
@@ -219,7 +264,15 @@ export default function Usuarios() {
           titulo="Crear usuario"
           tamanoModal="modal-lg"
           campos={obtenerCamposCrear()}
-          valoresIniciales={{ tipo: "Interno", is_active: "true", is_staff: "false" }}
+          valoresIniciales={{
+            tipo: "Interno",
+            is_active: "true",
+            is_staff: "false",
+            rut: "",
+            cargo: "",
+            especialidad_id: opcionesEspecialidades[0]?.value ?? "",
+            establecimiento_id: opcionesEstablecimientos[0]?.value ?? ""
+          }}
           transformarValores={transformarValoresUsuario}
           onGuardar={crearUsuario}
           onExito={() => {/* opcional: toast éxito */}}
@@ -229,7 +282,7 @@ export default function Usuarios() {
       <Buscar
         value={busqueda}
         onChange={setBusqueda}
-        placeholder="Buscar por usuario, nombre, email o especialidad…"
+        placeholder="Buscar por usuario, nombre, email, RUT o especialidad…"
         debounceMs={0}
         className=""
       />
@@ -242,8 +295,10 @@ export default function Usuarios() {
             <tr>
               <th>Usuario</th>
               <th>Nombre</th>
+              <th>RUT</th>
               <th>Email</th>
               <th>Teléfono</th>
+              <th>Cargo / Rol</th>
               <th>Tipo</th>
               <th>Especialidad</th>
               <th>Establecimiento</th>
@@ -252,9 +307,9 @@ export default function Usuarios() {
           </thead>
           <tbody>
             {cargando ? (
-              <tr><td colSpan={8}>Cargando…</td></tr>
+              <tr><td colSpan={10}>Cargando…</td></tr>
             ) : filtrados.length === 0 ? (
-              <tr><td colSpan={8} className="text-muted">No hay usuarios o sin resultados para “{busqueda}”.</td></tr>
+              <tr><td colSpan={10} className="text-muted">No hay usuarios o sin resultados para “{busqueda}”.</td></tr>
             ) : (
               filtrados.map((u) => {
                 const registroEdicion = prepararRegistroParaEditar(u);
@@ -262,8 +317,10 @@ export default function Usuarios() {
                   <tr key={u.id}>
                     <td><code>{u.username}</code></td>
                     <td>{u.first_name} {u.last_name}</td>
+                    <td>{u.rut || "—"}</td>
                     <td>{u.email}</td>
                     <td>{u.telefono || "—"}</td>
+                    <td>{u.cargo || "—"}</td>
                     <td>{u.tipo || "—"}</td>
                     <td>{u.especialidad?.nombre || "—"}</td>
                     <td>{u.establecimiento?.nombre || u.establecimiento || "—"}</td>

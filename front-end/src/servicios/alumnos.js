@@ -1,10 +1,5 @@
 // src/servicios/alumnos.js
-import axios from "axios";
-
-const API_BASE =
-  import.meta?.env?.VITE_API_BASE_URL ||
-  process.env.REACT_APP_API_URL ||
-  "http://127.0.0.1:8000/api";
+import api from "./api";
 
 // -------------------------------------------------------------------
 // Función utilitaria para desenpaquetar respuestas (para DRF paginado)
@@ -20,10 +15,10 @@ function unpack(data) {
 // -------------------------------------------------------------------
 export async function obtenerAlumnosPorCurso(cursoId) {
   // Trae el curso (para encabezado)
-  const { data: curso } = await axios.get(`${API_BASE}/cursos/${cursoId}/`);
+  const { data: curso } = await api.get(`/cursos/${cursoId}/`);
 
   // Trae alumnos por curso
-  const { data } = await axios.get(`${API_BASE}/estudiantes/?curso=${cursoId}`);
+  const { data } = await api.get(`/estudiantes/`, { params: { curso: cursoId } });
   const rows = unpack(data);
 
   const alumnos = rows.map((a) => ({
@@ -44,7 +39,7 @@ export async function obtenerAlumnosPorCurso(cursoId) {
 // 2) NUEVO: Obtener un estudiante específico (para la ficha del formulario)
 // -------------------------------------------------------------------
 export async function obtenerEstudiante(id) {
-  const { data } = await axios.get(`${API_BASE}/estudiantes/${id}/`);
+  const { data } = await api.get(`/estudiantes/${id}/`);
   return data;
 }
 
@@ -52,6 +47,6 @@ export async function obtenerEstudiante(id) {
 // 3) NUEVO: Obtener una Evaluación Integral específica
 // -------------------------------------------------------------------
 export async function obtenerEvaluacionIntegral(id) {
-  const { data } = await axios.get(`${API_BASE}/evaluaciones-integrales/${id}/`);
+  const { data } = await api.get(`/evaluaciones-integrales/${id}/`);
   return data;
 }

@@ -1,5 +1,6 @@
 // src/servicios/api.js
 import axios from "axios";
+import Cookies from "js-cookie";
 
 /*
  |--------------------------------------------------------------------------
@@ -19,12 +20,23 @@ import axios from "axios";
  |
 */
 
-const API_BASE_URL =
+let API_BASE_URL =
   (typeof import.meta !== "undefined" &&
     import.meta.env &&
     import.meta.env.VITE_API_BASE_URL) ||
-  process.env.REACT_APP_API_BASE_URL ||
-  "http://localhost:8000/api"; // fallback seguro
+  process.env.REACT_APP_API_BASE_URL;
+
+if (!API_BASE_URL && typeof window !== "undefined") {
+  const protocol = window.location.protocol || "http:";
+  const host = window.location.hostname || "127.0.0.1";
+  const isLocalHost = host === "localhost" || host === "127.0.0.1";
+  const backendPort = isLocalHost ? ":8000" : (window.location.port ? `:${window.location.port}` : "");
+  API_BASE_URL = `${protocol}//${host}${backendPort}/api`;
+}
+
+if (!API_BASE_URL) {
+  API_BASE_URL = "http://127.0.0.1:8000/api";
+}
 
 /*
  |--------------------------------------------------------------------------
@@ -36,6 +48,15 @@ const API_BASE_URL =
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
+});
+
+// Interceptor para enviar el token CSRF en cada request
+api.interceptors.request.use(config => {
+  const csrftoken = Cookies.get('csrftoken');
+  if (csrftoken) {
+    config.headers['X-CSRFToken'] = csrftoken;
+  }
+  return config;
 });
 
 /*

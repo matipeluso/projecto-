@@ -23,7 +23,7 @@ export default function Login() {
       await login({ identifier, password });
       navigate(from, { replace: true });
     } catch (err) {
-      const msg = err?.response?.data?.message || "Credenciales inválidas";
+      const msg = err?.message || "Credenciales inválidas";
       setErrorMsg(msg);
     } finally {
       setLoading(false);

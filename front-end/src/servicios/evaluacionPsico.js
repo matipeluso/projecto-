@@ -1,39 +1,37 @@
 import api from "./api";
-import axios from 'axios';
 
-const API_URL = '/api/psico/evaluaciones/';
+const RESOURCE = "/evaluaciones-psicopedagogicas/";
 
-// LISTAR TODAS LAS EVALUACIONES PSICOPEDAGÓGICAS
-export async function listarEvaluacionesPsico() {
-  const res = await api.get("/evaluaciones-psicopedagogicas/");
+export async function listarEvaluacionesPsico(params = {}) {
+  const res = await api.get(RESOURCE, { params });
   return res.data;
 }
 
-// CREAR EVALUACIÓN
+export async function obtenerEvaluacionPsico(id) {
+  const res = await api.get(`${RESOURCE}${id}/`);
+  return res.data;
+}
+
+export async function obtenerEvaluacionPorEstudiante(estudianteId) {
+  if (!estudianteId) return null;
+  const res = await api.get(RESOURCE, { params: { estudiante: estudianteId } });
+  const payload = res.data;
+  const lista = Array.isArray(payload) ? payload : payload?.results ?? [];
+  return lista[0] ?? null;
+}
+
 export async function crearEvaluacionPsico(datos) {
-  const res = await api.post("/evaluaciones-psicopedagogicas/", datos);
+  const res = await api.post(RESOURCE, datos);
   return res.data;
 }
 
-// ELIMINAR EVALUACIÓN
-export async function eliminarEvaluacionPsico(id) {
-  const res = await api.delete(`/evaluaciones-psicopedagogicas/${id}/`);
-  return res.data;
-}
-
-// ACTUALIZAR EVALUACIÓN (PUT)
 export async function actualizarEvaluacionPsico(id, datos) {
-  const res = await api.put(`/evaluaciones-psicopedagogicas/${id}/`, datos);
+  const res = await api.patch(`${RESOURCE}${id}/`, datos);
   return res.data;
 }
 
-// CRUD con axios
-export const getEvaluacionesPsico = () => axios.get(API_URL);
-export const getEvaluacionPsico = (id) => axios.get(`${API_URL}${id}/`);
-export const createEvaluacionPsico = (data) => axios.post(API_URL, data);
-export const updateEvaluacionPsico = (id, data) => axios.put(`${API_URL}${id}/`, data);
-export const deleteEvaluacionPsico = (id) => axios.delete(`${API_URL}${id}/`);
-
-// Endpoints para PDF
-export const getEvaluacionPsicoPDF = (id) => axios.get(`${API_URL}${id}/pdf/`, { responseType: 'blob' });
+export async function eliminarEvaluacionPsico(id) {
+  const res = await api.delete(`${RESOURCE}${id}/`);
+  return res.data;
+}
 

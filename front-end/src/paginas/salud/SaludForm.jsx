@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { crearAntecedenteSalud, actualizarAntecedenteSalud } from '../../servicios/salud';
+import { listarEstudiantes } from '../../servicios/estudiantes';
+import { listarCursos } from '../../servicios/cursos';
 import { Alert } from 'react-bootstrap';
 import { useAuth } from '../../contexto/AuthContext';
 
@@ -13,11 +15,22 @@ const TIPO_PARTO_OPCIONES = [
 
 const SaludForm = ({ modo = 'crear', antecedente = null, anamnesisId }) => {
   const { user } = useAuth();
+  const [cursos, setCursos] = useState([]);
+  const [cargandoCursos, setCargandoCursos] = useState(false);
+  const [cursoSeleccionado, setCursoSeleccionado] = useState(
+    antecedente?.anamnesis?.estudiante?.curso?.id ? String(antecedente.anamnesis.estudiante.curso.id) : ''
+  );
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [cargandoEstudiantes, setCargandoEstudiantes] = useState(false);
+  const [alerta, setAlerta] = useState({ show: false, mensaje: '', variante: 'success' });
   const [form, setForm] = useState({
     anamnesis: anamnesisId || '',
+    estudiante_id: antecedente?.anamnesis?.estudiante?.id || '',
     motivo_consulta: antecedente?.motivo_consulta || '',
     profesional: '', // Se setea en useEffect
     especialidad: '', // Se setea en useEffect
+    rut_profesional: antecedente?.rut_profesional || '',
+    cargo_profesional: antecedente?.cargo_profesional || '',
     procedencia: antecedente?.procedencia || '',
     contacto: antecedente?.contacto || '',
     fecha_evaluacion: antecedente?.fecha_evaluacion || '',
@@ -41,15 +54,59 @@ const SaludForm = ({ modo = 'crear', antecedente = null, anamnesisId }) => {
     // En producción, deberías obtener el ID real del usuario desde backend
     setForm(f => ({
       ...f,
-      profesional: user?.id || 1, // Cambia por el ID real si lo tienes
-      especialidad: user?.especialidad || 'Sin especialidad',
+      profesional: user?.id || '',
+      especialidad: user?.especialidad?.nombre || 'Sin especialidad',
+      rut_profesional: user?.rut || '',
+      cargo_profesional: user?.cargo || user?.especialidad?.nombre || '',
     }));
   }, [user]);
 
-  const [alerta, setAlerta] = useState({ show: false, mensaje: '', variante: 'success' });
+  useEffect(() => {
+    const cargarCursos = async () => {
+      setCargandoCursos(true);
+      try {
+        const { data } = await listarCursos();
+        const items = Array.isArray(data) ? data : data?.results ?? [];
+        setCursos(items);
+      } catch (error) {
+        console.error('[SaludForm] Error cargando cursos', error);
+        setAlerta({ show: true, mensaje: 'No se pudieron cargar los cursos. Intenta nuevamente.', variante: 'danger' });
+      } finally {
+        setCargandoCursos(false);
+      }
+    };
+    cargarCursos();
+  }, []);
+
+  useEffect(() => {
+    const cargarEstudiantes = async () => {
+      if (!cursoSeleccionado) {
+        setEstudiantes([]);
+        setForm(f => ({ ...f, estudiante_id: '' }));
+        return;
+      }
+      setCargandoEstudiantes(true);
+      try {
+        const { data } = await listarEstudiantes({ curso: cursoSeleccionado });
+        const items = Array.isArray(data) ? data : data?.results ?? [];
+        setEstudiantes(items);
+      } catch (error) {
+        console.error('[SaludForm] Error cargando estudiantes', error);
+        setAlerta({ show: true, mensaje: 'No se pudieron cargar los estudiantes del curso. Intenta nuevamente.', variante: 'danger' });
+      } finally {
+        setCargandoEstudiantes(false);
+      }
+    };
+    cargarEstudiantes();
+  }, [cursoSeleccionado]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    if (name === 'curso_id') {
+      setCursoSeleccionado(value);
+      setForm((prev) => ({ ...prev, estudiante_id: '' }));
+      return;
+    }
     setForm({
       ...form,
       [name]: type === 'checkbox' ? checked : value,
@@ -58,11 +115,18 @@ const SaludForm = ({ modo = 'crear', antecedente = null, anamnesisId }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.estudiante_id && !form.anamnesis) {
+      setAlerta({ show: true, mensaje: 'Debes seleccionar un curso y un estudiante antes de guardar.', variante: 'warning' });
+      return;
+    }
     try {
       const payload = { ...form };
-      // profesional debe ser el ID
-      payload.profesional = user?.id || 1;
-      payload.especialidad = user?.especialidad || 'Sin especialidad';
+      if (!payload.anamnesis) delete payload.anamnesis;
+      if (payload.estudiante_id === '') delete payload.estudiante_id;
+      payload.profesional = user?.id || form.profesional || null;
+      payload.especialidad = user?.especialidad?.nombre || 'Sin especialidad';
+      payload.rut_profesional = user?.rut || form.rut_profesional || '';
+      payload.cargo_profesional = user?.cargo || form.cargo_profesional || payload.especialidad;
       if (modo === 'crear') {
         await crearAntecedenteSalud(payload);
         setAlerta({ show: true, mensaje: 'Registro creado exitosamente.', variante: 'success' });
@@ -79,24 +143,72 @@ const SaludForm = ({ modo = 'crear', antecedente = null, anamnesisId }) => {
     <form className="p-4 border rounded bg-light" onSubmit={handleSubmit}>
       <h4>1. Identificación del estudiante</h4>
       <div className="mb-3">
+        <label>Curso</label>
+        <select
+          className="form-select"
+          name="curso_id"
+          value={cursoSeleccionado}
+          onChange={handleChange}
+          disabled={cargandoCursos}
+        >
+          <option value="">{cargandoCursos ? 'Cargando cursos...' : 'Seleccione un curso'}</option>
+          {cursos.map((curso) => (
+            <option key={curso.id} value={curso.id}>
+              {curso.nombre}
+              {curso?.establecimiento?.nombre ? ` – ${curso.establecimiento.nombre}` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="mb-3">
+        <label>Estudiante</label>
+        <select
+          className="form-select"
+          name="estudiante_id"
+          value={form.estudiante_id}
+          onChange={handleChange}
+          disabled={!cursoSeleccionado || cargandoEstudiantes}
+        >
+          <option value="">
+            {!cursoSeleccionado ? 'Selecciona un curso primero' : cargandoEstudiantes ? 'Cargando estudiantes...' : 'Seleccione un estudiante'}
+          </option>
+          {estudiantes.map((est) => (
+            <option key={est.id} value={est.id}>
+              {est.nombres_apellidos}
+              {est?.curso?.nombre ? ` – ${est.curso.nombre}` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="mb-3">
         <label>Motivo de consulta</label>
         <input type="text" className="form-control" name="motivo_consulta" value={form.motivo_consulta} onChange={handleChange} />
       </div>
       <h4>2. Identificación del profesional</h4>
       <div className="row mb-3">
-        <div className="col">
+        <div className="col-md-3">
           <label>Nombre profesional</label>
-          <input type="text" className="form-control" name="profesional" value={user?.first_name + ' ' + user?.last_name || ''} disabled />
+          <input type="text" className="form-control" value={`${user?.first_name || ''} ${user?.last_name || ''}`.trim()} disabled />
         </div>
-        <div className="col">
+        <div className="col-md-3">
+          <label>RUT</label>
+          <input type="text" className="form-control" value={user?.rut || form.rut_profesional || ''} disabled />
+        </div>
+        <div className="col-md-3">
+          <label>Cargo / Rol</label>
+          <input type="text" className="form-control" value={user?.cargo || form.cargo_profesional || ''} disabled />
+        </div>
+        <div className="col-md-3">
           <label>Especialidad</label>
-          <input type="text" className="form-control" name="especialidad" value={user?.especialidad || 'Sin especialidad'} disabled />
+          <input type="text" className="form-control" value={user?.especialidad?.nombre || form.especialidad || 'Sin especialidad'} disabled />
         </div>
-        <div className="col">
+      </div>
+      <div className="row mb-3">
+        <div className="col-md-6">
           <label>Procedencia</label>
           <input type="text" className="form-control" name="procedencia" value={form.procedencia} onChange={handleChange} />
         </div>
-        <div className="col">
+        <div className="col-md-6">
           <label>Contacto</label>
           <input type="text" className="form-control" name="contacto" value={form.contacto} onChange={handleChange} />
         </div>

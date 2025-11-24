@@ -1,0 +1,12 @@
+# Python virtual environments
+back-end/venv/
+
+# Python cache artifacts
+__pycache__/
+*.pyc
+
+# Node dependencies
+front-end/node_modules/
+
+# Local environment overrides
+*.env

@@ -1,211 +1,367 @@
-import React, { useState, useEffect } from "react";
-import DatosBase from "./DatosBase";
-import TablaSubsectores from "./TablaSubsectores";
-import TablaEstrategias from "./TablaEstrategias";
-import TablaApoyosAdicionales from "./TablaApoyosAdicionales";
-import Subdimension1Comunicativas from "./Subdimension1Comunicativas";
-import Subdimension2Social from "./Subdimension2Social";
-import Subdimension3Motricidad from "./Subdimension3Motricidad";
-import Subdimension4Aprendizaje from "./Subdimension4Aprendizaje";
-import Subdimension6Sensoperceptivas from "./Subdimension6Sensoperceptivas";
-import Subdimension7Lectoescritura from "./Subdimension7Lectoescritura";
-import Subdimension8Matematicas from "./Subdimension8Matematicas";
-import { crearEvaluacionPsico, actualizarEvaluacionPsico } from "../../servicios/evaluacionPsico";
+import React from "react";
 
-function EvaluacionPsicoForm({ evaluacion, onSuccess }) {
-  // Estados principales
-  const [form, setForm] = useState({
-    estudiante: "",
-    evaluador: "",
-    fecha: "",
-    observaciones: "",
-  });
-  const [subsectores, setSubsectores] = useState([]);
-  const [estrategias, setEstrategias] = useState([]);
-  const [apoyos, setApoyos] = useState([]);
-  const [items1, setItems1] = useState([]);
-  const [items2, setItems2] = useState([]);
-  const [items3, setItems3] = useState([]);
-  const [items4, setItems4] = useState([]);
-  const [items6, setItems6] = useState([]);
-  const [items7, setItems7] = useState([]);
-  const [items8, setItems8] = useState([]);
-  const [loading, setLoading] = useState(false);
+const SUBDIMENSION_ITEMS = [
+  "Se comunica e interactúa con los demás de manera espontánea.",
+  "Se comunica e interactúa con los demás de manera guiada.",
+  "Participa en conversaciones con sus pares y/o adultos de forma espontánea.",
+  "La pronunciación, orden y estructura gramatical de sus expresiones verbales/en lengua de señas favorecen la comprensión del mensaje.",
+  "Utiliza oraciones completas en intervenciones orales/en lengua de señas.",
+  "Relata en forma secuenciada y clara experiencias personales.",
+  "Realiza y cumple instrucciones entregadas oralmente/en lengua de señas.",
+  "Ajusta su lenguaje a diversos contextos e interlocutores.",
+  "Su expresión oral es rítmica y con curva melódica/Su expresión manual es rítmica, con fluidez de señalización y coherente con la expresión facial y corporal (prosodia) (Espectro Autista).",
+  "Utiliza palabras/señas y conceptos rebuscados.",
+  "El volumen de su voz/claridad en la señalización se ajusta a las diversas situaciones y/o contextos.",
+  "Conoce y usa un vocabulario amplio.",
+  "Comunica sensaciones, experiencias, emociones, necesidades e ideas a través del lenguaje oral/lengua de señas.",
+  "Repite frecuentemente palabras/señas u oraciones (ecolalia).",
+];
 
-  useEffect(() => {
-    if (evaluacion) {
-      setForm({
-        estudiante: evaluacion.estudiante || "",
-        evaluador: evaluacion.evaluador || "",
-        fecha: evaluacion.fecha || "",
-        observaciones: evaluacion.observaciones || "",
-      });
-      setSubsectores(evaluacion.subsectores || []);
-      setEstrategias(evaluacion.estrategias_apoyo || []);
-      setApoyos(evaluacion.apoyos_adicionales || []);
-      setItems1((evaluacion.items || []).filter(i => i.area === "Comunicativas"));
-      setItems2((evaluacion.items || []).filter(i => i.area === "Social"));
-      setItems3((evaluacion.items || []).filter(i => i.area === "Motricidad"));
-      setItems4((evaluacion.items || []).filter(i => i.area === "Aprendizaje"));
-      setItems6((evaluacion.items || []).filter(i => i.area === "Sensoperceptivas"));
-      setItems7((evaluacion.items || []).filter(i => i.area === "Lectoescritura"));
-      setItems8((evaluacion.items || []).filter(i => i.area === "Matematicas"));
-    } else {
-      setForm({ estudiante: "", evaluador: "", fecha: "", observaciones: "" });
-      setSubsectores([]);
-      setEstrategias([]);
-      setApoyos([]);
-      setItems1([]);
-      setItems2([]);
-      setItems3([]);
-      setItems4([]);
-      setItems6([]);
-      setItems7([]);
-      setItems8([]);
-    }
-  }, [evaluacion]);
+const SUBDIMENSION_COLUMNS = [
+  { label: "S", detail: "(1)" },
+  { label: "G", detail: "(2)" },
+  { label: "O", detail: "(3)" },
+  { label: "N", detail: "(4)" },
+  { label: "NO", detail: "(0)" },
+];
 
-  // Handlers generales
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  // Subsectores
-  const handleSubsectorChange = (idx, field, value) => {
-    const updated = [...subsectores];
-    updated[idx][field] = value;
-    setSubsectores(updated);
-  };
-  const handleAddSubsector = () => setSubsectores([...subsectores, { subsector: "", tipo: "" }]);
-  const handleRemoveSubsector = (idx) => setSubsectores(subsectores.filter((_, i) => i !== idx));
-
-  // Estrategias
-  const handleEstrategiaChange = (idx, field, value) => {
-    const updated = [...estrategias];
-    updated[idx][field] = value;
-    setEstrategias(updated);
-  };
-  const handleAddEstrategia = () => setEstrategias([...estrategias, { descripcion: "", aplicada: false, exitosa: false, numero: 0 }]);
-  const handleRemoveEstrategia = (idx) => setEstrategias(estrategias.filter((_, i) => i !== idx));
-
-  // Apoyos
-  const handleApoyoChange = (idx, field, value) => {
-    const updated = [...apoyos];
-    updated[idx][field] = value;
-    setApoyos(updated);
-  };
-  const handleAddApoyo = () => setApoyos([...apoyos, { tipo: "", apoyo: "", recibido: false, descripcion_extra: "" }]);
-  const handleRemoveApoyo = (idx) => setApoyos(apoyos.filter((_, i) => i !== idx));
-
-  // Subdimensiones
-  const handleItemsChange = (setter, items, idx, field, value) => {
-    const updated = [...items];
-    updated[idx][field] = value;
-    setter(updated);
-  };
-  const handleAddItem = (setter, items, area) => setter([...items, { area, descripcion: "", valor: 0 }]);
-  const handleRemoveItem = (setter, items, idx) => setter(items.filter((_, i) => i !== idx));
-
-  // Submit
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const payload = {
-        ...form,
-        subsectores,
-        estrategias_apoyo: estrategias,
-        apoyos_adicionales: apoyos,
-        items: [
-          ...items1,
-          ...items2,
-          ...items3,
-          ...items4,
-          ...items6,
-          ...items7,
-          ...items8,
-        ],
-      };
-      if (evaluacion && evaluacion.id) {
-        await actualizarEvaluacionPsico(evaluacion.id, payload);
-      } else {
-        await crearEvaluacionPsico(payload);
-      }
-      if (onSuccess) onSuccess();
-    } catch (err) {
-      alert("❌ Error al guardar la evaluación");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+function EvaluacionPsicoForm() {
   return (
-    <form onSubmit={handleSubmit}>
-      <DatosBase {...form} onChange={handleChange} />
-      <TablaSubsectores
-        subsectores={subsectores}
-        onChange={handleSubsectorChange}
-        onAdd={handleAddSubsector}
-        onRemove={handleRemoveSubsector}
-      />
-      <TablaEstrategias
-        estrategias={estrategias}
-        onChange={handleEstrategiaChange}
-        onAdd={handleAddEstrategia}
-        onRemove={handleRemoveEstrategia}
-      />
-      <TablaApoyosAdicionales
-        apoyos={apoyos}
-        onChange={handleApoyoChange}
-        onAdd={handleAddApoyo}
-        onRemove={handleRemoveApoyo}
-      />
-      <Subdimension1Comunicativas
-        items={items1}
-        onChange={(idx, field, value) => handleItemsChange(setItems1, items1, idx, field, value)}
-        onAdd={() => handleAddItem(setItems1, items1, "Comunicativas")}
-        onRemove={(idx) => handleRemoveItem(setItems1, items1, idx)}
-      />
-      <Subdimension2Social
-        items={items2}
-        onChange={(idx, field, value) => handleItemsChange(setItems2, items2, idx, field, value)}
-        onAdd={() => handleAddItem(setItems2, items2, "Social")}
-        onRemove={(idx) => handleRemoveItem(setItems2, items2, idx)}
-      />
-      <Subdimension3Motricidad
-        items={items3}
-        onChange={(idx, field, value) => handleItemsChange(setItems3, items3, idx, field, value)}
-        onAdd={() => handleAddItem(setItems3, items3, "Motricidad")}
-        onRemove={(idx) => handleRemoveItem(setItems3, items3, idx)}
-      />
-      <Subdimension4Aprendizaje
-        items={items4}
-        onChange={(idx, field, value) => handleItemsChange(setItems4, items4, idx, field, value)}
-        onAdd={() => handleAddItem(setItems4, items4, "Aprendizaje")}
-        onRemove={(idx) => handleRemoveItem(setItems4, items4, idx)}
-      />
-      <Subdimension6Sensoperceptivas
-        items={items6}
-        onChange={(idx, field, value) => handleItemsChange(setItems6, items6, idx, field, value)}
-        onAdd={() => handleAddItem(setItems6, items6, "Sensoperceptivas")}
-        onRemove={(idx) => handleRemoveItem(setItems6, items6, idx)}
-      />
-      <Subdimension7Lectoescritura
-        items={items7}
-        onChange={(idx, field, value) => handleItemsChange(setItems7, items7, idx, field, value)}
-        onAdd={() => handleAddItem(setItems7, items7, "Lectoescritura")}
-        onRemove={(idx) => handleRemoveItem(setItems7, items7, idx)}
-      />
-      <Subdimension8Matematicas
-        items={items8}
-        onChange={(idx, field, value) => handleItemsChange(setItems8, items8, idx, field, value)}
-        onAdd={() => handleAddItem(setItems8, items8, "Matematicas")}
-        onRemove={(idx) => handleRemoveItem(setItems8, items8, idx)}
-      />
-      <button type="submit" className="btn btn-success" disabled={loading}>
-        {loading ? "Guardando..." : evaluacion ? "Actualizar" : "Crear"}
-      </button>
-    </form>
+    <>
+      <div className="container py-4">
+        {/* === 1. Identificación del estudiante === */}
+        <section className="mb-5">
+        <h4 className="text-uppercase fw-bold border-bottom pb-2">Identificación del estudiante</h4>
+        <div className="row g-3">
+          <div className="col-md-6">
+            <label className="form-label">Nombre</label>
+            <input type="text" className="form-control" placeholder="Nombre completo" />
+          </div>
+          <div className="col-md-3">
+            <label className="form-label d-block">Sexo</label>
+            <div className="d-flex gap-3">
+              {[
+                { label: "F", value: "f" },
+                { label: "M", value: "m" },
+              ].map((option) => (
+                <label key={option.value} className="form-check-label">
+                  <input type="radio" name="sexo" className="form-check-input me-1" />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="col-md-3">
+            <label className="form-label">Fecha nacimiento</label>
+            <input type="date" className="form-control" />
+          </div>
+          <div className="col-md-3 d-flex gap-2">
+            <div className="flex-fill">
+              <label className="form-label">Edad actual (años)</label>
+              <input type="number" className="form-control" min="0" />
+            </div>
+            <div className="flex-fill">
+              <label className="form-label">Meses</label>
+              <input type="number" className="form-control" min="0" max="11" />
+            </div>
+          </div>
+          <div className="col-md-3">
+            <label className="form-label">País natal</label>
+            <input type="text" className="form-control" />
+          </div>
+          <div className="col-md-9">
+            <label className="form-label">Domicilio</label>
+            <input type="text" className="form-control" />
+          </div>
+        </div>
+
+        <div className="row g-3 mt-1">
+          <div className="col-md-4">
+            <label className="form-label">Teléfono</label>
+            <input type="text" className="form-control" />
+          </div>
+          <div className="col-md-8">
+            <label className="form-label d-block">Vía de comunicación habitual</label>
+            <div className="d-flex gap-3 flex-wrap">
+              {[
+                { label: "Oral", value: "oral" },
+                { label: "Lengua de Señas", value: "senas" },
+                { label: "Otra", value: "otra" },
+              ].map((option) => (
+                <label key={option.value} className="form-check-label">
+                  <input type="checkbox" className="form-check-input me-1" />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="row g-3 mt-1">
+          <div className="col-md-6">
+            <label className="form-label">Lengua materna</label>
+            <div className="table-responsive">
+              <table className="table table-bordered align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Grado dominio</th>
+                    <th>Comprende</th>
+                    <th>Habla</th>
+                    <th>Lee</th>
+                    <th>Escribe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Seleccione</td>
+                    <td><input type="checkbox" className="form-check-input" /></td>
+                    <td><input type="checkbox" className="form-check-input" /></td>
+                    <td><input type="checkbox" className="form-check-input" /></td>
+                    <td><input type="checkbox" className="form-check-input" /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="col-md-6">
+            <label className="form-label">Lengua de uso</label>
+            <div className="table-responsive">
+              <table className="table table-bordered align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Grado dominio</th>
+                    <th>Comprende</th>
+                    <th>Habla</th>
+                    <th>Lee</th>
+                    <th>Escribe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Seleccione</td>
+                    <td><input type="checkbox" className="form-check-input" /></td>
+                    <td><input type="checkbox" className="form-check-input" /></td>
+                    <td><input type="checkbox" className="form-check-input" /></td>
+                    <td><input type="checkbox" className="form-check-input" /></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className="row g-3 mt-1">
+          <div className="col-md-4">
+            <label className="form-label">Escolaridad alcanzada</label>
+            <input type="text" className="form-control" />
+          </div>
+          <div className="col-md-5">
+            <label className="form-label">Establecimiento</label>
+            <input type="text" className="form-control" />
+          </div>
+          <div className="col-md-3">
+            <label className="form-label">RBD</label>
+            <input type="text" className="form-control" />
+          </div>
+        </div>
+      </section>
+
+      {/* === 2. Trayectoria escolar === */}
+      <section className="mb-5">
+        <h4 className="text-uppercase fw-bold border-bottom pb-2">Trayectoria escolar</h4>
+        <div className="row g-3">
+          <div className="col-md-4">
+            <label className="form-label">Edad de ingreso al sistema infantil</label>
+            <input type="text" className="form-control" />
+          </div>
+          <div className="col-md-4">
+            <label className="form-label d-block">Asistió jardín infantil</label>
+            <div className="form-check form-check-inline">
+              <input className="form-check-input" type="radio" name="jardin" />
+              <label className="form-check-label">Sí</label>
+            </div>
+            <div className="form-check form-check-inline">
+              <input className="form-check-input" type="radio" name="jardin" />
+              <label className="form-check-label">No</label>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label d-block">Ha repetido curso</label>
+            <div className="form-check form-check-inline">
+              <input className="form-check-input" type="radio" name="repite" />
+              <label className="form-check-label">Sí</label>
+            </div>
+            <div className="form-check form-check-inline">
+              <input className="form-check-input" type="radio" name="repite" />
+              <label className="form-check-label">No</label>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">Nº de colegios en que ha estado</label>
+            <input type="number" className="form-control" min="0" />
+          </div>
+          <div className="col-md-4">
+            <label className="form-label d-block">Modalidad de enseñanza</label>
+            <div className="d-flex gap-3 flex-wrap">
+              {["Regular", "Especial", "Técnica"].map((label) => (
+                <label key={label} className="form-check-label">
+                  <input type="checkbox" className="form-check-input me-1" />{label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label d-block">Tiene amigos</label>
+            <div className="form-check form-check-inline">
+              <input className="form-check-input" type="radio" name="amigos" />
+              <label className="form-check-label">Sí</label>
+            </div>
+            <div className="form-check form-check-inline">
+              <input className="form-check-input" type="radio" name="amigos" />
+              <label className="form-check-label">No</label>
+            </div>
+          </div>
+          <div className="col-12">
+            <label className="form-label">Motivo de los cambios</label>
+            <textarea className="form-control" rows="2" />
+          </div>
+        </div>
+      </section>
+
+      {/* === 3. Situación escolar actual === */}
+      <section className="mb-5">
+        <h4 className="text-uppercase fw-bold border-bottom pb-2">Situación escolar actual</h4>
+        <div className="row g-3">
+          <div className="col-md-4">
+            <label className="form-label">Nivel / Curso actual</label>
+            <input type="text" className="form-control" />
+          </div>
+          <div className="col-md-8 d-flex flex-column gap-2">
+            {["Asiste regularmente", "Asiste con agrado", "Apoyo familiar en tareas"].map((label, index) => (
+              <div key={label}>
+                <label className="form-label me-3">{label}</label>
+                <div className="form-check form-check-inline">
+                  <input className="form-check-input" type="radio" name={`situacion-${index}`} />
+                  <label className="form-check-label">Sí</label>
+                </div>
+                <div className="form-check form-check-inline">
+                  <input className="form-check-input" type="radio" name={`situacion-${index}`} />
+                  <label className="form-check-label">No</label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <label className="form-label">Aspectos destacados en su historia educativa</label>
+          <textarea className="form-control" rows="3" />
+        </div>
+        <div className="mt-3">
+          <label className="form-label">Observaciones</label>
+          <textarea className="form-control" rows="3" />
+        </div>
+
+        <div className="row g-3 mt-1">
+          <div className="col-md-6">
+            <label className="form-label">Evaluador</label>
+            <input type="text" className="form-control" />
+          </div>
+          <div className="col-md-3">
+            <label className="form-label">Fecha</label>
+            <input type="date" className="form-control" />
+          </div>
+        </div>
+      </section>
+
+        {/* === 4. Subdimensiones === */}
+        <section className="mb-4">
+          <div className="bg-primary text-white px-3 py-2 rounded-top">
+            <strong>SUBDIMENSIONES</strong>
+          </div>
+          <div className="px-3 py-2 border border-top-0 rounded-bottom mb-3">
+            Marque con una X la opción que representa los comportamientos en el contexto escolar.
+          </div>
+
+          <div className="table-responsive">
+            <table className="table table-bordered align-middle">
+              <thead className="table-light text-center">
+                <tr>
+                  <th style={{ width: "40px" }}>N°</th>
+                  <th className="text-start">Descripción</th>
+                  {SUBDIMENSION_COLUMNS.map((col) => (
+                    <th key={col.label} style={{ width: "75px" }}>
+                      {col.label}
+                      <br />
+                      <small>{col.detail}</small>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {SUBDIMENSION_ITEMS.map((texto, idx) => (
+                  <tr key={texto}>
+                    <td className="text-center fw-bold">{idx + 1}</td>
+                    <td>{texto}</td>
+                    {SUBDIMENSION_COLUMNS.map((col) => (
+                      <td key={`${idx}-${col.label}`} className="text-center">
+                        <input type="radio" name={`subdimension-${idx}`} className="form-check-input" />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="row g-3 mt-3">
+            <div className="col-lg-6">
+              <label className="form-label">
+                Describa la mayor habilidad del estudiante en esta área (y contexto en que se manifiesta)
+              </label>
+              <textarea className="form-control" rows="3" />
+            </div>
+            <div className="col-lg-6">
+              <label className="form-label">
+                Describa la mayor debilidad del estudiante en esta área (y contexto en que se manifiesta)
+              </label>
+              <textarea className="form-control" rows="3" />
+            </div>
+            <div className="col-lg-6">
+              <label className="form-label">Síntesis: Señale el desempeño general del estudiante en esta área</label>
+              <textarea className="form-control" rows="2" />
+            </div>
+            <div className="col-lg-6">
+              <label className="form-label">
+                Observaciones (detalle aspectos o antecedentes no considerados o que crea importante relevar o complementar)
+              </label>
+              <textarea className="form-control" rows="2" />
+            </div>
+          </div>
+
+          <div className="row g-3 mt-3">
+            <div className="col-md-4 col-lg-3">
+              <div className="border rounded p-3 h-100">
+                <strong>Significados de la escala</strong>
+                <ul className="list-unstyled mb-0 small">
+                  <li>1 = Siempre</li>
+                  <li>2 = Generalmente</li>
+                  <li>3 = Ocasionalmente</li>
+                  <li>4 = Nunca</li>
+                  <li>0 = No observado</li>
+                </ul>
+              </div>
+            </div>
+            <div className="col-md-8 col-lg-9">
+              <div className="alert alert-warning mb-0">
+                Completar esta tabla para cada área del instrumento original. Puedes duplicar filas según sea necesario.
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+    </>
   );
 }
 

@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     Usuario, Especialidad, Curso, Apoderado, Estudiante,
     Anamnesis, Informante, Entrevistador, AntecedenteSalud,
-    EvaluacionPsicopedagogica, SubdimensionItem, Subsector,
+    EvaluacionPsicopedagogica, SubdimensionItem, SubdimensionComentario, Subsector,
     EstrategiaApoyo, ApoyoAdicional,
     EvaluacionSalud,
     InformeFamilia, InformeFamiliaInstrumento, InformeFamiliaAmbito,
@@ -16,16 +16,16 @@ from .models import (
 @admin.register(Usuario)
 class UsuarioAdmin(UserAdmin):
     model = Usuario
-    list_display = ('username', 'email', 'first_name', 'last_name', 'especialidad', 'tipo', 'is_active', 'is_staff')
+    list_display = ('username', 'email', 'rut', 'first_name', 'last_name', 'cargo', 'especialidad', 'tipo', 'is_active', 'is_staff')
     list_filter = ('especialidad', 'tipo', 'is_active', 'is_staff')
-    search_fields = ('username', 'email', 'first_name', 'last_name')
+    search_fields = ('username', 'email', 'rut', 'first_name', 'last_name')
     ordering = ('username',)
 
     fieldsets = (
         ('Credenciales', {'fields': ('username', 'password')}),
         ('Información personal', {
             'fields': (
-                'first_name', 'last_name', 'email', 'telefono', 'establecimiento',
+                'first_name', 'last_name', 'email', 'telefono', 'rut', 'cargo', 'establecimiento',
                 'tipo', 'especialidad'
             )
         }),
@@ -40,7 +40,7 @@ class UsuarioAdmin(UserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('username', 'email', 'password1', 'password2', 'tipo', 'especialidad', 'is_staff', 'is_active'),
+            'fields': ('username', 'email', 'rut', 'cargo', 'password1', 'password2', 'tipo', 'especialidad', 'is_staff', 'is_active'),
         }),
     )
 
@@ -60,6 +60,7 @@ modelos_simples = [
     AntecedenteSalud,
     EvaluacionPsicopedagogica,
     SubdimensionItem,
+    SubdimensionComentario,
     Subsector,
     EstrategiaApoyo,
     ApoyoAdicional,

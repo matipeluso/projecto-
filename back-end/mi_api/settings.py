@@ -30,7 +30,15 @@ ALLOWED_HOSTS = ['*']
 
 CSRF_TRUSTED_ORIGINS = [
     'http://54.234.221.254',
-    'http://54.234.221.254:8000'
+    'http://54.234.221.254:8000',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+]
+
+# Permitir CORS para frontend local
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
 ]
 
 

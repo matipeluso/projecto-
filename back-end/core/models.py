@@ -41,9 +41,15 @@ class Establecimiento(models.Model):
 
 class Usuario(AbstractUser):
     telefono = models.CharField(max_length=20, blank=True, null=True)
+    rut = models.CharField(max_length=12, blank=True, null=True, unique=True)
+    cargo = models.CharField(max_length=120, blank=True, null=True)
     tipo = models.CharField(
         max_length=20,
-        choices=[('Interno', 'Interno'), ('Externo', 'Externo')],
+        choices=[
+            ('Interno', 'Interno'),
+            ('Externo', 'Externo'),
+            ('Sostenedor', 'Sostenedor'),
+        ],
         default='Interno'
     )
     especialidad = models.ForeignKey(
@@ -95,6 +101,20 @@ class Estudiante(models.Model):
     nacionalidad = models.CharField(max_length=50, blank=True, null=True)
     lengua_origen = models.CharField(max_length=50, blank=True, null=True)
     lengua_uso = models.CharField(max_length=50, blank=True, null=True)
+    direccion = models.CharField(max_length=200, blank=True, null=True)
+    telefono = models.CharField(max_length=20, blank=True, null=True)
+    via_comunicacion = models.CharField(
+        max_length=20,
+        choices=[
+            ('oral', 'Oral'),
+            ('senas', 'Lengua de Señas'),
+            ('otra', 'Otra'),
+        ],
+        blank=True,
+        null=True
+    )
+    dominio_lengua_origen = models.JSONField(blank=True, null=True)
+    dominio_lengua_uso = models.JSONField(blank=True, null=True)
     curso = models.ForeignKey(Curso, on_delete=models.SET_NULL, null=True, blank=True, related_name='estudiantes')
     apoderado = models.ForeignKey(Apoderado, on_delete=models.SET_NULL, null=True, blank=True, related_name='estudiantes')
     establecimiento = models.ForeignKey(
@@ -140,6 +160,8 @@ class AntecedenteSalud(models.Model):
     anamnesis = models.ForeignKey(Anamnesis, on_delete=models.CASCADE, related_name='antecedentes_salud')
     motivo_consulta = models.CharField(max_length=255, blank=True, null=True)
     profesional = models.ForeignKey('Usuario', on_delete=models.SET_NULL, null=True, blank=True, related_name='antecedentes_salud')
+    rut_profesional = models.CharField(max_length=15, blank=True, null=True)
+    cargo_profesional = models.CharField(max_length=120, blank=True, null=True)
     especialidad = models.CharField(max_length=100, blank=True, null=True)
     procedencia = models.CharField(max_length=100, blank=True, null=True)
     contacto = models.CharField(max_length=100, blank=True, null=True)
@@ -166,22 +188,34 @@ class AntecedenteSalud(models.Model):
 # ================================================================
 
 class EvaluacionPsicopedagogica(models.Model):
-    Estudiante = models.ForeignKey(Estudiante, on_delete=models.CASCADE, related_name='evaluaciones_psicopedagogicas')
+    estudiante = models.ForeignKey(Estudiante, on_delete=models.CASCADE, related_name='evaluaciones_psicopedagogicas')
+    evaluador_usuario = models.ForeignKey(
+        'Usuario', on_delete=models.SET_NULL, null=True, blank=True, related_name='evaluaciones_psico'
+    )
     evaluador = models.CharField(max_length=100, blank=True, null=True)
+    rol_evaluador = models.CharField(max_length=120, blank=True, null=True)
     fecha = models.DateField(blank=True, null=True)
+    fecha_evaluacion = models.DateField(blank=True, null=True)
+    firma = models.CharField(max_length=200, blank=True, null=True)
     observaciones = models.TextField(blank=True, null=True)
-
-
-
-
-class SubdimensionItem(models.Model):
-    evaluacion = models.ForeignKey(EvaluacionPsicopedagogica, on_delete=models.CASCADE, related_name='items')
-    area = models.CharField(max_length=50)
-    descripcion = models.TextField()
-    valor = models.PositiveSmallIntegerField()
+    edad_anios = models.PositiveSmallIntegerField(blank=True, null=True)
+    edad_meses = models.PositiveSmallIntegerField(blank=True, null=True)
+    lengua_materna_grado = models.CharField(max_length=120, blank=True, null=True)
+    lengua_materna_comprende = models.BooleanField(default=False)
+    lengua_materna_habla = models.BooleanField(default=False)
+    lengua_materna_lee = models.BooleanField(default=False)
+    lengua_materna_escribe = models.BooleanField(default=False)
+    lengua_uso_grado = models.CharField(max_length=120, blank=True, null=True)
+    lengua_uso_comprende = models.BooleanField(default=False)
+    lengua_uso_habla = models.BooleanField(default=False)
+    lengua_uso_lee = models.BooleanField(default=False)
+    lengua_uso_escribe = models.BooleanField(default=False)
+    pdf_generado = models.FileField(upload_to='evaluaciones_psico/', blank=True, null=True)
 
     def __str__(self):
-        return f"{self.area} ({self.valor})"
+        return f"Evaluación de {self.estudiante.nombres_apellidos} ({self.fecha})"
+
+
 
 
 class Subsector(models.Model):
@@ -199,6 +233,10 @@ class EstrategiaApoyo(models.Model):
     aplicada = models.BooleanField(default=False)
     exitosa = models.BooleanField(default=False)
     numero = models.PositiveSmallIntegerField()
+    detalle = models.TextField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ('evaluacion', 'numero')
 
 
 class ApoyoAdicional(models.Model):
@@ -216,7 +254,8 @@ class ApoyoAdicional(models.Model):
         ('fonoaudiologo', 'Fonoaudiólogo'),
         ('neurologo', 'Neurólogo'),
         ('psicopedagogo', 'Psicopedagogo / Educ. Diferencial'),
-        ('otros', 'Otros'),  # Para activar un campo extra
+        ('otros_interno', 'Otros (interno)'),
+        ('otros_externo', 'Otros (externo)'),
     ]
 
     evaluacion = models.ForeignKey(
@@ -229,6 +268,7 @@ class ApoyoAdicional(models.Model):
     apoyo = models.CharField(max_length=50, choices=OPCIONES_APOYO)
     recibido = models.BooleanField(default=False)  # Sí / No
     descripcion_extra = models.CharField(max_length=255, blank=True, null=True)  # Para "Otros"
+    nota = models.TextField(blank=True, null=True)
 
 # ================================================================
 # 6. EVALUACIÓN DE SALUD
@@ -243,6 +283,8 @@ class EvaluacionSalud(models.Model):
     estado_salud_general = models.TextField(blank=True, null=True)
     indicaciones = models.TextField(blank=True, null=True)
     profesional = models.ForeignKey(Usuario, on_delete=models.SET_NULL, null=True, blank=True, related_name='evaluaciones_salud')
+    rut_profesional = models.CharField(max_length=15, blank=True, null=True)
+    cargo_profesional = models.CharField(max_length=120, blank=True, null=True)
     especialidad = models.CharField(max_length=100, blank=True, null=True)
     procedencia = models.CharField(max_length=100, blank=True, null=True)
     contacto = models.CharField(max_length=100, blank=True, null=True)
@@ -465,25 +507,9 @@ class EvaluacionPIE(models.Model):
         return f"Evaluación PIE - {self.registro.curso.nombre}"
 
 
-
-# Campos adicionales sugeridos según PDF
-direccion = models.CharField(max_length=200, blank=True, null=True)
-telefono = models.CharField(max_length=20, blank=True, null=True)
-
-via_comunicacion = models.CharField(
-    max_length=20,
-    choices=[
-        ('oral', 'Oral'),
-        ('senas', 'Lengua de Señas'),
-        ('otra', 'Otra'),
-    ],
-    blank=True,
-    null=True
-)
-
-# Dominio de lengua (Estructura JSON para comprende / habla / lee / escribe)
-dominio_lengua_origen = models.JSONField(blank=True, null=True)
-dominio_lengua_uso = models.JSONField(blank=True, null=True)
+# Nota: campos como dirección, teléfono o dominio de lengua ya se gestionan en el modelo Estudiante.
+# Se elimina el bloque suelto que quedaba aquí para evitar confusiones y porque no generaba
+# columnas adicionales en la base de datos.
 
 
 
@@ -540,6 +566,7 @@ class SituacionEscolar(models.Model):
 
 class SubdimensionArea(models.Model):
     nombre = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=80, unique=True, blank=True, null=True)
 
     def __str__(self):
         return self.nombre
@@ -556,6 +583,25 @@ class SubdimensionItem(models.Model):
     def __str__(self):
         return f"{self.area.nombre} - {self.valor}"
 
+
+
+class SubdimensionComentario(models.Model):
+    evaluacion = models.ForeignKey(
+        EvaluacionPsicopedagogica,
+        on_delete=models.CASCADE,
+        related_name='comentarios_subdimension'
+    )
+    area = models.ForeignKey(SubdimensionArea, on_delete=models.CASCADE, related_name='comentarios')
+    fortaleza = models.TextField(blank=True, null=True)
+    debilidad = models.TextField(blank=True, null=True)
+    sintesis = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ('evaluacion', 'area')
+
+    def __str__(self):
+        return f"Comentario {self.area.nombre} - {self.evaluacion_id}"
 
 
 class ObservacionEscolar(models.Model):
@@ -578,10 +624,14 @@ class ObservacionEscolar(models.Model):
         blank=True,
         null=True
     )
+    lugar_detallado = models.CharField(max_length=120, blank=True, null=True)
 
     nombre_evaluador = models.CharField(max_length=120)
     rut_evaluador = models.CharField(max_length=20, blank=True, null=True)
     rol_cargo = models.CharField(max_length=100, blank=True, null=True)
+    especialidad = models.CharField(max_length=120, blank=True, null=True)
+    fecha_observacion = models.DateField(blank=True, null=True)
+    firma = models.CharField(max_length=200, blank=True, null=True)
 
 
 
@@ -591,6 +641,7 @@ class ObservacionItem(models.Model):
         on_delete=models.CASCADE,
         related_name='items'
     )
+    numero = models.PositiveSmallIntegerField()
 
     categoria = models.CharField(
         max_length=50,
@@ -605,6 +656,9 @@ class ObservacionItem(models.Model):
 
     def __str__(self):
         return f"{self.categoria} - {self.valor}"
+
+    class Meta:
+        unique_together = ('observacion', 'numero')
 
 
 

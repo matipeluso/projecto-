@@ -27,7 +27,7 @@ export default function EstructuraDeCurso() {
   const { id } = useParams();
   const nombreEstParam = normalizarParamEst(id);
 
-  const [data, setData] = useState({ establecimiento: { nombre: nombreEstParam }, cursos: [] });
+  const [data, setData] = useState({ establecimiento: { id: null, nombre: nombreEstParam }, cursos: [] });
   const [busqueda, setBusqueda] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
@@ -56,6 +56,8 @@ export default function EstructuraDeCurso() {
     cargarDatos();
   }, [nombreEstParam]);
 
+  const establecimientoId = data?.establecimiento?.id;
+
   const cursosFiltrados = useMemo(() => {
     const q = normalizarTexto(busqueda);
     if (!q) return data.cursos;
@@ -63,7 +65,7 @@ export default function EstructuraDeCurso() {
       const cursoNombre = normalizarTexto(c.nombre ?? '');
       const nivel = normalizarTexto(c.nivel ?? '');
       const anio = normalizarTexto((c.anio_escolar ?? '').toString());
-      const est = normalizarTexto(c.establecimiento ?? '');
+      const est = normalizarTexto(c.establecimiento_nombre ?? c.establecimiento?.nombre ?? '');
       const display = normalizarTexto(c.nombre_display ?? '');
       return (
         cursoNombre.includes(q) ||
@@ -93,34 +95,41 @@ export default function EstructuraDeCurso() {
                 Refrescar
               </button>
 
-              <BotonCrearConModal
-                textoBoton="Agregar curso"
-                icono="bi-plus-lg"
-                titulo="Agregar curso"
-                tamanoModal="modal-lg"
-                valoresIniciales={{
-                  nombre: '',
-                  nivel: '',
-                  anio_escolar: '',
-                  establecimiento: data?.establecimiento?.nombre ?? nombreEstParam ?? '',
-                }}
-                campos={[
-                  { name: 'nombre', label: 'Curso (nombre)', required: true, placeholder: 'Ej: 1 medio A', col: 'col-md-6' },
-                  { name: 'nivel', label: 'Nivel', placeholder: 'Ej: 1 medio', col: 'col-md-6' },
-                  { name: 'anio_escolar', label: 'Año escolar', type: 'number', attrs: { min: 1900, max: 2100 }, col: 'col-md-6' },
-                  { name: 'establecimiento', label: 'Establecimiento', placeholder: 'Ej: Liceo X', col: 'col-md-6' },
-                ]}
-                transformarValores={(vals) => ({
-                  nombre: String(vals.nombre ?? '').trim(),
-                  ...(vals.nivel ? { nivel: String(vals.nivel).trim() } : {}),
-                  ...(vals.anio_escolar ? { anio_escolar: Number(vals.anio_escolar) } : {}),
-                  ...(vals.establecimiento ? { establecimiento: String(vals.establecimiento).trim() } : {}),
-                })}
-                onGuardar={async (payload) => await crearCurso(payload)}
-                onExito={async () => {
-                  await cargarDatos();
-                }}
-              />
+              {establecimientoId ? (
+                <BotonCrearConModal
+                  textoBoton="Agregar curso"
+                  icono="bi-plus-lg"
+                  titulo={`Agregar curso${data?.establecimiento?.nombre ? ` – ${data.establecimiento.nombre}` : ''}`}
+                  tamanoModal="modal-lg"
+                  valoresIniciales={{
+                    nombre: '',
+                    nivel: '',
+                    anio_escolar: new Date().getFullYear(),
+                  }}
+                  campos={[
+                    { name: 'nombre', label: 'Curso (nombre)', required: true, placeholder: 'Ej: 1 medio A', col: 'col-md-6' },
+                    { name: 'nivel', label: 'Nivel', placeholder: 'Ej: 1 medio', col: 'col-md-6' },
+                    { name: 'anio_escolar', label: 'Año escolar', type: 'number', attrs: { min: 1900, max: 2100 }, col: 'col-md-6' },
+                  ]}
+                  transformarValores={(vals) => ({
+                    nombre: String(vals.nombre ?? '').trim(),
+                    ...(vals.nivel ? { nivel: String(vals.nivel).trim() } : {}),
+                    ...(vals.anio_escolar ? { anio_escolar: Number(vals.anio_escolar) } : {}),
+                    establecimiento_id: establecimientoId,
+                  })}
+                  onGuardar={async (payload) => await crearCurso(payload)}
+                  onExito={async () => {
+                    await cargarDatos();
+                  }}
+                />
+              ) : (
+                <div className="d-flex flex-column">
+                  <button type="button" className="btn btn-secondary" disabled>
+                    Agregar curso
+                  </button>
+                  <small className="text-muted">Selecciona el establecimiento desde la lista principal para habilitar esta acción.</small>
+                </div>
+              )}
             </div>
           </div>
 
@@ -164,7 +173,7 @@ export default function EstructuraDeCurso() {
                         <td>{c.nombre ?? c.nombre_display ?? '—'}</td>
                         <td>{c.nivel ?? '—'}</td>
                         <td className="text-center">{c.anio_escolar ?? '—'}</td>
-                        <td>{c.establecimiento ?? '—'}</td>
+                        <td>{c.establecimiento_nombre ?? c.establecimiento?.nombre ?? '—'}</td>
                         <td className="text-center"><span className="badge text-bg-secondary">NO</span></td>
                         <td className="text-center"><span className="badge text-bg-success">Sí</span></td>
                         <td className="text-center">0</td>

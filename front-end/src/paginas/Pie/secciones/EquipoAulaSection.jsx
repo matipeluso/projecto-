@@ -1,15 +1,45 @@
-import React from "react";
+import React, { useMemo, useRef } from "react";
 
 /**
  * EquipoAula (models.EquipoAula)
  * Campos: nombre, rol, telefono, correo (+ registro FK)
  */
-export default function EquipoAulaSection({ registroId, items, setItems, onSave, onDelete }) {
+export default function EquipoAulaSection({ registroId, items, setItems, onSave, onDelete, usuarios = [] }) {
+  const formRef = useRef(null);
+
+  const opcionesUsuarios = useMemo(
+    () =>
+      usuarios.map((usuario) => {
+        const nombre = [usuario.first_name, usuario.last_name].filter(Boolean).join(" ") || usuario.username;
+        const especialidad = usuario.especialidad?.nombre ?? usuario.especialidad ?? "";
+        return {
+          value: String(usuario.id),
+          label: `${nombre}${especialidad ? ` — ${especialidad}` : ""}`,
+          correo: usuario.email || "",
+          telefono: usuario.telefono || "",
+          nombre,
+        };
+      }),
+    [usuarios]
+  );
+
+  const handleUsuarioSelect = (event) => {
+    if (!formRef.current) return;
+    const seleccion = opcionesUsuarios.find((opt) => opt.value === event.target.value);
+    if (!seleccion) return;
+    formRef.current.nombre.value = seleccion.nombre;
+    if (formRef.current.telefono) {
+      formRef.current.telefono.value = seleccion.telefono;
+    }
+    if (formRef.current.correo) {
+      formRef.current.correo.value = seleccion.correo;
+    }
+  };
   return (
     <section>
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h5 className="mb-0">Equipo de Aula</h5>
-        <button className="btn btn-primary btn-sm" onClick={() => onSave(items)}>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => onSave(items)}>
           Guardar sección
         </button>
       </div>
@@ -54,12 +84,13 @@ export default function EquipoAulaSection({ registroId, items, setItems, onSave,
       </div>
 
       <form
+        ref={formRef}
         className="row g-3 mt-2"
         onSubmit={(e) => {
           e.preventDefault();
           const f = e.currentTarget;
           const nuevo = {
-            id: Date.now(),
+            id: `temp-${Date.now()}`,
             nombre: f.nombre.value.trim(),
             rol: f.rol.value,
             telefono: f.telefono.value.trim(),
@@ -70,11 +101,20 @@ export default function EquipoAulaSection({ registroId, items, setItems, onSave,
           f.reset();
         }}
       >
-        <div className="col-md-3">
+        <div className="col-md-4">
+          <label className="form-label">Profesional registrado</label>
+          <select name="usuario_id" className="form-select" onChange={handleUsuarioSelect}>
+            <option value="">Seleccione un usuario…</option>
+            {opcionesUsuarios.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="col-md-4">
           <label className="form-label">Nombre</label>
           <input name="nombre" className="form-control" required />
         </div>
-        <div className="col-md-3">
+        <div className="col-md-4">
           <label className="form-label">Rol</label>
           <select name="rol" className="form-select" required>
             <option value="">Seleccione…</option>

@@ -1,50 +1,58 @@
 // src/contexto/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from "react";
+import { toast } from "react-toastify";
+import api from "../servicios/api";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [status, setStatus] = useState("loading"); // "loading" | "ready"
+  const [status, setStatus] = useState("loading");
   const [isAuth, setIsAuth] = useState(false);
-  const [user, setUser] = useState(null); // { email, role }
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Inicializa desde storage o pide al backend la sesión
-    // TODO: reemplazar por GET /session/me (con credentials: 'include') si usas cookies
-    const isAuthLS = localStorage.getItem("pie_isAuth") === "true";
-    const role = localStorage.getItem("pie_user_role");
-    const email = localStorage.getItem("pie_user_email");
-    if (isAuthLS) {
-      setIsAuth(true);
-      setUser({ email: email || "admin@pie.cl", role: role || "Admin" });
-    } else {
-      setIsAuth(false);
-      setUser(null);
+    async function bootstrapSession() {
+      try {
+        await api.get("/auth/csrf/");
+        const { data } = await api.get("/mi-perfil/");
+        setIsAuth(true);
+        setUser(data);
+      } catch {
+        setIsAuth(false);
+        setUser(null);
+      } finally {
+        setStatus("ready");
+      }
     }
-    setStatus("ready");
+    bootstrapSession();
   }, []);
 
   async function login({ identifier, password }) {
-    // TODO: reemplazar por POST /login (credentials: 'include')
-    // Valida con backend. Por ahora demo:
-    if (!identifier || !password) {
-      throw new Error("Credenciales inválidas");
+    try {
+      await api.get("/auth/csrf/");
+      const { data } = await api.post("/login/", { identifier, password });
+      setIsAuth(true);
+      setUser(data.user);
+      const nombre = data.user.first_name || data.user.username || data.user.email;
+      toast.success(`Bienvenido ${nombre}`);
+      return data;
+    } catch (error) {
+      const message = error.response?.data?.message || "Credenciales inválidas";
+      toast.error(message);
+      throw new Error(message);
     }
-    // Simula éxito:
-    localStorage.setItem("pie_isAuth", "true");
-    localStorage.setItem("pie_user_role", "Admin"); // o el rol que devuelva tu backend
-    localStorage.setItem("pie_user_email", identifier);
-    setIsAuth(true);
-    setUser({ email: identifier, role: "Admin" });
   }
 
   async function logout() {
-    // TODO: POST /logout (credentials: 'include') y luego limpiar estado
-    localStorage.removeItem("pie_isAuth");
-    localStorage.removeItem("pie_user_role");
-    localStorage.removeItem("pie_user_email");
-    setIsAuth(false);
-    setUser(null);
+    try {
+      await api.post("/logout/");
+      toast.success("Sesión cerrada");
+    } catch (error) {
+      toast.warning("La sesión ya estaba cerrada o expiró");
+    } finally {
+      setIsAuth(false);
+      setUser(null);
+    }
   }
 
   return (

@@ -111,6 +111,7 @@ export default function BotonCrearConModal({
       onChange,
       placeholder: c.placeholder || '',
       required: Boolean(c.required),
+      disabled: Boolean(c.disabled),
       ...(c.attrs || {}),
     };
 

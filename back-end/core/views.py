@@ -1,294 +1,677 @@
-from .models import EvaluacionPsicopedagogica, SubdimensionItem, Subsector, EstrategiaApoyo, ApoyoAdicional
-from .serializers import EvaluacionPsicopedagogicaSerializer, SubdimensionItemSerializer, SubsectorSerializer, EstrategiaApoyoSerializer, ApoyoAdicionalSerializer
-from django.shortcuts import get_object_or_404
-from django.template.loader import render_to_string
-from django.http import HttpResponse
-from xhtml2pdf import pisa
-
-
-# --- FLUJO EVALUACIÓN DE SALUD MINEDUC ---
-from rest_framework import viewsets, status
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from .models import AntecedenteSalud
-from .serializers import AntecedenteSaludSerializer
-
-class AntecedenteSaludViewSet(viewsets.ModelViewSet):
-    queryset = AntecedenteSalud.objects.all()
-    serializer_class = AntecedenteSaludSerializer
-
-    def get_queryset(self):
-        anamnesis_id = self.request.query_params.get('anamnesis')
-        if anamnesis_id:
-            return self.queryset.filter(anamnesis_id=anamnesis_id)
-        return self.queryset
-
-    @action(detail=True, methods=['get'])
-    def pdf(self, request, pk=None):
-        from django.shortcuts import get_object_or_404
-        from django.http import HttpResponse
-        from django.template.loader import render_to_string
-        from xhtml2pdf import pisa
-        obj = get_object_or_404(AntecedenteSalud, pk=pk)
-        html = render_to_string('core/salud_pdf.html', {'salud': obj})
-        response = HttpResponse(content_type='application/pdf')
-        pisa.CreatePDF(html, dest=response)
-        return response
-from rest_framework import viewsets
-from .models import *
-from .serializers import *
-from .utils.pdf_generator import generar_pdf_anamnesis
+from django.contrib.auth import authenticate, get_user_model, login as django_login, logout as django_logout
 from django.contrib.auth.tokens import default_token_generator
-from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.middleware.csrf import get_token
+from django.shortcuts import get_object_or_404
 from django.utils.encoding import force_bytes, force_str
-from rest_framework import status
-from rest_framework.decorators import api_view
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from rest_framework import filters, permissions, status, viewsets
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-# ================================================================
-# CRUDs Automáticos
-# ================================================================
+
+from .models import (
+    ActividadComunidad,
+    Anamnesis,
+    AntecedenteSalud,
+    AntecedentesSaludFormulario,
+    Apoderado,
+    Curso,
+    DetalleEvaluacionSalud,
+    EquipoAula,
+    Establecimiento,
+    Especialidad,
+    Estudiante,
+    EvaluacionAmbienteEscolar,
+    EvaluacionLenguaje,
+    EvaluacionNeuropsicologica,
+    EvaluacionPIE,
+    EvaluacionPsicologica,
+    EvaluacionPsicopedagogica,
+    EvaluacionSalud,
+    FormularioEvaluacionSalud,
+    InformeEvaluacionSalud,
+    InformeFamilia,
+    InformeFamiliaAmbito,
+    InformeFamiliaEntrega,
+    InformeFamiliaInstrumento,
+    InformeFamiliaReceptor,
+    InformeFamiliaSeguimiento,
+    ItemAmbienteEscolar,
+    LogroAprendizaje,
+    ObservacionAmbiente,
+    ObservacionEscolar,
+    ObservacionItem,
+    PlanificacionPIE,
+    RegistroPIE,
+    SituacionEscolar,
+    SubdimensionArea,
+    SubdimensionItem,
+    Subsector,
+    TrabajoColaborativo,
+    TrayectoriaEscolar,
+)
+from .serializers import (
+    ActividadComunidadSerializer,
+    AnamnesisSerializer,
+    AntecedenteSaludSerializer,
+    AntecedentesSaludFormularioSerializer,
+    ApoderadoSerializer,
+    CursoSerializer,
+    DetalleEvaluacionSaludSerializer,
+    EquipoAulaSerializer,
+    EspecialidadSerializer,
+    EstablecimientoSerializer,
+    EstudianteSerializer,
+    EvaluacionAmbienteEscolarSerializer,
+    EvaluacionLenguajeSerializer,
+    EvaluacionNeuropsicologicaSerializer,
+    EvaluacionPIESerializer,
+    EvaluacionPsicologicaSerializer,
+    EvaluacionPsicopedagogicaSerializer,
+    EvaluacionSaludSerializer,
+    FormularioEvaluacionSaludSerializer,
+    InformeEvaluacionSaludSerializer,
+    InformeFamiliaAmbitoSerializer,
+    InformeFamiliaEntregaSerializer,
+    InformeFamiliaInstrumentoSerializer,
+    InformeFamiliaReceptorSerializer,
+    InformeFamiliaSeguimientoSerializer,
+    InformeFamiliaSerializer,
+    ItemAmbienteEscolarSerializer,
+    LogroAprendizajeSerializer,
+    ObservacionAmbienteSerializer,
+    ObservacionEscolarSerializer,
+    ObservacionItemSerializer,
+    PlanificacionPIESerializer,
+    RegistroPIESerializer,
+    SituacionEscolarSerializer,
+    SubdimensionAreaSerializer,
+    SubdimensionItemSerializer,
+    SubsectorSerializer,
+    TrabajoColaborativoSerializer,
+    TrayectoriaEscolarSerializer,
+    UsuarioPerfilSerializer,
+    UsuarioSerializer,
+)
+from .utils.pdf_generator import generar_pdf_anamnesis, generar_pdf_registro_pie
+
+Usuario = get_user_model()
+
+
+@api_view(["GET"])
+def csrf_token_view(request):
+    """Entrega un token CSRF y lo sincroniza con la cookie."""
+    token = get_token(request)
+    return Response({"csrfToken": token})
+
+
+@api_view(["POST"])
+def login_view(request):
+    identifier = request.data.get("identifier") or request.data.get("username") or request.data.get("email")
+    password = request.data.get("password")
+    if not identifier or not password:
+        return Response({"message": "Credenciales requeridas."}, status=status.HTTP_400_BAD_REQUEST)
+
+    username = identifier
+    if "@" in identifier:
+        try:
+            username = Usuario.objects.get(email__iexact=identifier).username
+        except Usuario.DoesNotExist:
+            pass
+
+    user = authenticate(request, username=username, password=password)
+    if user is None:
+        return Response({"message": "Credenciales inválidas."}, status=status.HTTP_401_UNAUTHORIZED)
+    if not user.is_active:
+        return Response({"message": "El usuario está inactivo."}, status=status.HTTP_403_FORBIDDEN)
+
+    django_login(request, user)
+    get_token(request)
+    return Response({"message": "Autenticado correctamente.", "user": UsuarioPerfilSerializer(user).data})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def logout_view(request):
+    django_logout(request)
+    return Response({"message": "Sesión finalizada."})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def mi_perfil(request):
+    return Response(UsuarioPerfilSerializer(request.user).data)
+
+
+class IsStaffOrReadOnly(permissions.BasePermission):
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return request.user.is_authenticated
+        return request.user.is_staff or request.user.is_superuser
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return self.has_permission(request, view)
+        return request.user.is_staff or request.user.is_superuser
+
 
 class UsuarioViewSet(viewsets.ModelViewSet):
-    queryset = Usuario.objects.all()
+    queryset = Usuario.objects.select_related("especialidad", "establecimiento").all().order_by("username")
     serializer_class = UsuarioSerializer
+    permission_classes = [IsStaffOrReadOnly]
+    filter_backends = [filters.SearchFilter]
+    search_fields = [
+        "username",
+        "first_name",
+        "last_name",
+        "email",
+        "especialidad__nombre",
+        "establecimiento__nombre",
+    ]
 
-class EspecialidadViewSet(viewsets.ModelViewSet):
-    queryset = Especialidad.objects.all()
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated:
+            return Usuario.objects.none()
+        if user.is_staff or user.is_superuser:
+            return self.queryset
+        return self.queryset.filter(pk=user.pk)
+
+
+class RoleScopedViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    establishment_lookup = None
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        return self.apply_role_filter(queryset)
+
+    def apply_role_filter(self, queryset):
+        user = self.request.user
+        if not user.is_authenticated:
+            return queryset.none()
+        if user.is_superuser or user.is_staff:
+            return queryset
+
+        tipo = (user.tipo or "").lower()
+        if tipo in {"interno", "sostenedor"}:
+            if self.establishment_lookup and user.establecimiento_id:
+                filtro = {self.establishment_lookup: user.establecimiento_id}
+                return queryset.filter(**filtro).distinct()
+            return queryset.none()
+        if tipo == "externo":
+            return self.filter_for_externo(queryset)
+        return queryset.none()
+
+    def filter_for_externo(self, queryset):
+        return queryset.none()
+
+
+class EspecialidadViewSet(RoleScopedViewSet):
+    queryset = Especialidad.objects.all().order_by("nombre")
     serializer_class = EspecialidadSerializer
 
-class CursoViewSet(viewsets.ModelViewSet):
-    queryset = Curso.objects.all()
+    def apply_role_filter(self, queryset):
+        user = self.request.user
+        if not user.is_authenticated:
+            return queryset.none()
+        if user.is_superuser or user.is_staff:
+            return queryset
+        # Profesionales pueden leer las especialidades para formularios
+        return queryset
+
+
+class EstablecimientoViewSet(RoleScopedViewSet):
+    queryset = Establecimiento.objects.all().order_by("nombre")
+    serializer_class = EstablecimientoSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["nombre", "rbd", "comuna", "region"]
+    establishment_lookup = "id"
+
+    def filter_for_externo(self, queryset):
+        return queryset.none()
+
+
+class CursoViewSet(RoleScopedViewSet):
+    queryset = Curso.objects.select_related("establecimiento").all().order_by("nombre")
     serializer_class = CursoSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["nombre", "nivel", "establecimiento__nombre"]
+    establishment_lookup = "establecimiento_id"
 
-class ApoderadoViewSet(viewsets.ModelViewSet):
-    queryset = Apoderado.objects.all()
+    def filter_for_externo(self, queryset):
+        user = self.request.user
+        return queryset.filter(registros_pie__responsable=user).distinct()
+
+
+class ApoderadoViewSet(RoleScopedViewSet):
+    queryset = Apoderado.objects.all().order_by("nombres_apellidos")
     serializer_class = ApoderadoSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["nombres_apellidos", "run", "telefono", "correo"]
+    establishment_lookup = "estudiantes__establecimiento_id"
 
-class EstudianteViewSet(viewsets.ModelViewSet):
-    queryset = Estudiante.objects.all()
+
+class EstudianteViewSet(RoleScopedViewSet):
+    queryset = (
+        Estudiante.objects.select_related("curso", "establecimiento", "apoderado")
+        .all()
+        .order_by("nombres_apellidos")
+    )
     serializer_class = EstudianteSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["nombres_apellidos", "run", "curso__nombre", "establecimiento__nombre"]
+    establishment_lookup = "establecimiento_id"
 
-class AnamnesisViewSet(viewsets.ModelViewSet):
-    queryset = Anamnesis.objects.all()
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        curso_id = self.request.query_params.get("curso")
+        if curso_id:
+            queryset = queryset.filter(curso_id=curso_id)
+        return queryset
+
+    def filter_for_externo(self, queryset):
+        user = self.request.user
+        return queryset.filter(curso__registros_pie__responsable=user).distinct()
+
+
+class AnamnesisViewSet(RoleScopedViewSet):
+    queryset = Anamnesis.objects.select_related("estudiante").all()
     serializer_class = AnamnesisSerializer
+    establishment_lookup = "estudiante__establecimiento_id"
 
     def perform_create(self, serializer):
         instance = serializer.save()
-        pdf_path = generar_pdf_anamnesis(instance)
-        instance.pdf_generado = pdf_path
+        instance.pdf_generado = generar_pdf_anamnesis(instance)
         instance.save()
 
     def perform_update(self, serializer):
         instance = serializer.save()
-        pdf_path = generar_pdf_anamnesis(instance)
-        instance.pdf_generado = pdf_path
+        instance.pdf_generado = generar_pdf_anamnesis(instance)
         instance.save()
 
 
-class EvaluacionPsicopedagogicaViewSet(viewsets.ModelViewSet):
-    queryset = EvaluacionPsicopedagogica.objects.all()
-    serializer_class = EvaluacionPsicopedagogicaSerializer
-
-class EvaluacionSaludViewSet(viewsets.ModelViewSet):
-    queryset = EvaluacionSalud.objects.all()
-    serializer_class = EvaluacionSaludSerializer
-
-class InformeFamiliaViewSet(viewsets.ModelViewSet):
-    queryset = InformeFamilia.objects.all()
-    serializer_class = InformeFamiliaSerializer
+class AntecedenteSaludViewSet(RoleScopedViewSet):
+    queryset = AntecedenteSalud.objects.select_related("anamnesis", "anamnesis__estudiante").all()
+    serializer_class = AntecedenteSaludSerializer
+    establishment_lookup = "anamnesis__estudiante__establecimiento_id"
 
 
-class EstablecimientoViewSet(viewsets.ModelViewSet):
-    """
-    Vista CRUD para la gestión de establecimientos (colegios/escuelas)
-    """
-    queryset = Establecimiento.objects.all().order_by('nombre')
-    serializer_class = EstablecimientoSerializer
-
-
-
-
-Usuario = get_user_model()
-
-@api_view(['POST'])
-def password_reset_request(request):
-    email = request.data.get('email')
-    try:
-        user = Usuario.objects.get(email=email)
-        token = default_token_generator.make_token(user)
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
-        reset_link = f"http://tusitio.cl/password-reset/confirm/{uid}/{token}/"
-
-        send_mail(
-            '🔐 Restablecer contraseña',
-            f'Hola {user.first_name}, usa este enlace para restablecer tu contraseña:\n{reset_link}',
-            'tucorreo@gmail.com',
-            [user.email],
-            fail_silently=False,
+class EvaluacionPsicopedagogicaViewSet(RoleScopedViewSet):
+    queryset = (
+        EvaluacionPsicopedagogica.objects.select_related("estudiante", "evaluador_usuario")
+        .prefetch_related(
+            "items__area",
+            "comentarios_subdimension__area",
+            "subsectores",
+            "estrategias_apoyo",
+            "apoyos_adicionales",
+            "observaciones_ambiente",
         )
-        return Response({'message': 'Correo de recuperación enviado correctamente.'})
-    except Usuario.DoesNotExist:
-        return Response({'error': 'No existe un usuario con ese correo.'}, status=status.HTTP_404_NOT_FOUND)
+        .all()
+    )
+    serializer_class = EvaluacionPsicopedagogicaSerializer
+    establishment_lookup = "estudiante__establecimiento_id"
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        estudiante_id = self.request.query_params.get("estudiante")
+        if estudiante_id:
+            queryset = queryset.filter(estudiante_id=estudiante_id)
+        return queryset
 
 
-@api_view(['POST'])
-def password_reset_verify(request):
-    uidb64 = request.data.get('uid')
-    token = request.data.get('token')
-    try:
-        uid = force_str(urlsafe_base64_decode(uidb64))
-        user = Usuario.objects.get(pk=uid)
-        if default_token_generator.check_token(user, token):
-            return Response({'message': 'Token válido.'})
-        return Response({'error': 'Token inválido o expirado.'}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception:
-        return Response({'error': 'Solicitud inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+class TrayectoriaEscolarViewSet(RoleScopedViewSet):
+    queryset = TrayectoriaEscolar.objects.select_related("estudiante").all()
+    serializer_class = TrayectoriaEscolarSerializer
+    establishment_lookup = "estudiante__establecimiento_id"
 
 
-@api_view(['POST'])
-def password_reset_confirm(request):
-    uidb64 = request.data.get('uid')
-    token = request.data.get('token')
-    new_password = request.data.get('new_password')
-
-    try:
-        uid = force_str(urlsafe_base64_decode(uidb64))
-        user = Usuario.objects.get(pk=uid)
-        if default_token_generator.check_token(user, token):
-            user.set_password(new_password)
-            user.save()
-            return Response({'message': 'Contraseña restablecida correctamente.'})
-        return Response({'error': 'Token inválido o expirado.'}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception:
-        return Response({'error': 'Error al restablecer la contraseña.'}, status=status.HTTP_400_BAD_REQUEST)
+class SituacionEscolarViewSet(RoleScopedViewSet):
+    queryset = SituacionEscolar.objects.select_related("estudiante").all()
+    serializer_class = SituacionEscolarSerializer
+    establishment_lookup = "estudiante__establecimiento_id"
 
 
+class SubdimensionAreaViewSet(RoleScopedViewSet):
+    queryset = SubdimensionArea.objects.all().order_by("nombre")
+    serializer_class = SubdimensionAreaSerializer
+
+    def apply_role_filter(self, queryset):
+        # Todos los usuarios autenticados pueden consultar áreas
+        return queryset if self.request.user.is_authenticated else queryset.none()
 
 
+class SubdimensionItemViewSet(RoleScopedViewSet):
+    queryset = SubdimensionItem.objects.select_related("evaluacion", "area").all()
+    serializer_class = SubdimensionItemSerializer
+    establishment_lookup = "evaluacion__estudiante__establecimiento_id"
 
 
-# ================================================================
-# VIEWS – REGISTRO PIE
-# ================================================================
-
-from rest_framework import viewsets
-from .models import (
-    RegistroPIE, EquipoAula, PlanificacionPIE, TrabajoColaborativo,
-    ActividadComunidad, LogroAprendizaje, EvaluacionPIE
-)
-from .serializers import (
-    RegistroPIESerializer, EquipoAulaSerializer, PlanificacionPIESerializer,
-    TrabajoColaborativoSerializer, ActividadComunidadSerializer,
-    LogroAprendizajeSerializer, EvaluacionPIESerializer
-)
+class SubsectorViewSet(RoleScopedViewSet):
+    queryset = Subsector.objects.select_related("evaluacion").all()
+    serializer_class = SubsectorSerializer
+    establishment_lookup = "evaluacion__estudiante__establecimiento_id"
 
 
-class RegistroPIEViewSet(viewsets.ModelViewSet):
-    queryset = RegistroPIE.objects.all().order_by('-fecha_creacion')
+class ObservacionEscolarViewSet(RoleScopedViewSet):
+    queryset = (
+        ObservacionEscolar.objects.select_related("evaluacion", "evaluacion__estudiante")
+        .prefetch_related("items")
+        .all()
+    )
+    serializer_class = ObservacionEscolarSerializer
+    establishment_lookup = "evaluacion__estudiante__establecimiento_id"
+
+
+class ObservacionItemViewSet(RoleScopedViewSet):
+    queryset = (
+        ObservacionItem.objects.select_related(
+            "observacion",
+            "observacion__evaluacion",
+            "observacion__evaluacion__estudiante",
+        )
+        .all()
+    )
+    serializer_class = ObservacionItemSerializer
+    establishment_lookup = "observacion__evaluacion__estudiante__establecimiento_id"
+
+
+class EvaluacionAmbienteEscolarViewSet(RoleScopedViewSet):
+    queryset = (
+        EvaluacionAmbienteEscolar.objects.select_related("estudiante")
+        .prefetch_related("items")
+        .all()
+    )
+    serializer_class = EvaluacionAmbienteEscolarSerializer
+    establishment_lookup = "estudiante__establecimiento_id"
+
+
+class ItemAmbienteEscolarViewSet(RoleScopedViewSet):
+    queryset = (
+        ItemAmbienteEscolar.objects.select_related(
+            "evaluacion",
+            "evaluacion__estudiante",
+        ).all()
+    )
+    serializer_class = ItemAmbienteEscolarSerializer
+    establishment_lookup = "evaluacion__estudiante__establecimiento_id"
+
+
+class ObservacionAmbienteViewSet(RoleScopedViewSet):
+    queryset = (
+        ObservacionAmbiente.objects.select_related(
+            "evaluacion",
+            "evaluacion__estudiante",
+        ).all()
+    )
+    serializer_class = ObservacionAmbienteSerializer
+    establishment_lookup = "evaluacion__estudiante__establecimiento_id"
+
+
+class EvaluacionSaludViewSet(RoleScopedViewSet):
+    queryset = EvaluacionSalud.objects.select_related("estudiante").all()
+    serializer_class = EvaluacionSaludSerializer
+    establishment_lookup = "estudiante__establecimiento_id"
+
+    def filter_for_externo(self, queryset):
+        user = self.request.user
+        return queryset.filter(estudiante__curso__registros_pie__responsable=user).distinct()
+
+
+class FormularioEvaluacionSaludViewSet(RoleScopedViewSet):
+    queryset = (
+        FormularioEvaluacionSalud.objects.select_related("estudiante", "profesional")
+        .prefetch_related(
+            "detalles",
+            "antecedentes_salud",
+            "evaluaciones_psicologicas",
+            "evaluaciones_lenguaje",
+            "evaluaciones_neuropsicologicas",
+            "informes_evaluacion_salud",
+        )
+        .all()
+    )
+    serializer_class = FormularioEvaluacionSaludSerializer
+    establishment_lookup = "estudiante__establecimiento_id"
+
+
+class DetalleEvaluacionSaludViewSet(RoleScopedViewSet):
+    queryset = DetalleEvaluacionSalud.objects.select_related(
+        "formulario",
+        "formulario__estudiante",
+    ).all()
+    serializer_class = DetalleEvaluacionSaludSerializer
+    establishment_lookup = "formulario__estudiante__establecimiento_id"
+
+
+class AntecedentesSaludFormularioViewSet(RoleScopedViewSet):
+    queryset = AntecedentesSaludFormulario.objects.select_related(
+        "formulario",
+        "formulario__estudiante",
+    ).all()
+    serializer_class = AntecedentesSaludFormularioSerializer
+    establishment_lookup = "formulario__estudiante__establecimiento_id"
+
+
+class EvaluacionPsicologicaViewSet(RoleScopedViewSet):
+    queryset = EvaluacionPsicologica.objects.select_related(
+        "formulario",
+        "formulario__estudiante",
+    ).all()
+    serializer_class = EvaluacionPsicologicaSerializer
+    establishment_lookup = "formulario__estudiante__establecimiento_id"
+
+
+class EvaluacionLenguajeViewSet(RoleScopedViewSet):
+    queryset = EvaluacionLenguaje.objects.select_related(
+        "formulario",
+        "formulario__estudiante",
+    ).all()
+    serializer_class = EvaluacionLenguajeSerializer
+    establishment_lookup = "formulario__estudiante__establecimiento_id"
+
+
+class EvaluacionNeuropsicologicaViewSet(RoleScopedViewSet):
+    queryset = EvaluacionNeuropsicologica.objects.select_related(
+        "formulario",
+        "formulario__estudiante",
+    ).all()
+    serializer_class = EvaluacionNeuropsicologicaSerializer
+    establishment_lookup = "formulario__estudiante__establecimiento_id"
+
+
+class InformeEvaluacionSaludViewSet(RoleScopedViewSet):
+    queryset = InformeEvaluacionSalud.objects.select_related(
+        "formulario",
+        "formulario__estudiante",
+    ).all()
+    serializer_class = InformeEvaluacionSaludSerializer
+    establishment_lookup = "formulario__estudiante__establecimiento_id"
+
+
+class InformeFamiliaViewSet(RoleScopedViewSet):
+    queryset = InformeFamilia.objects.select_related("Estudiante").all()
+    serializer_class = InformeFamiliaSerializer
+    establishment_lookup = "Estudiante__establecimiento_id"
+
+
+class InformeFamiliaInstrumentoViewSet(RoleScopedViewSet):
+    queryset = InformeFamiliaInstrumento.objects.select_related(
+        "informe",
+        "informe__Estudiante",
+    ).all()
+    serializer_class = InformeFamiliaInstrumentoSerializer
+    establishment_lookup = "informe__Estudiante__establecimiento_id"
+
+
+class InformeFamiliaAmbitoViewSet(RoleScopedViewSet):
+    queryset = InformeFamiliaAmbito.objects.select_related(
+        "informe",
+        "informe__Estudiante",
+    ).all()
+    serializer_class = InformeFamiliaAmbitoSerializer
+    establishment_lookup = "informe__Estudiante__establecimiento_id"
+
+
+class InformeFamiliaSeguimientoViewSet(RoleScopedViewSet):
+    queryset = InformeFamiliaSeguimiento.objects.select_related(
+        "informe",
+        "informe__Estudiante",
+    ).all()
+    serializer_class = InformeFamiliaSeguimientoSerializer
+    establishment_lookup = "informe__Estudiante__establecimiento_id"
+
+
+class InformeFamiliaEntregaViewSet(RoleScopedViewSet):
+    queryset = InformeFamiliaEntrega.objects.select_related(
+        "informe",
+        "informe__Estudiante",
+    ).all()
+    serializer_class = InformeFamiliaEntregaSerializer
+    establishment_lookup = "informe__Estudiante__establecimiento_id"
+
+
+class InformeFamiliaReceptorViewSet(RoleScopedViewSet):
+    queryset = InformeFamiliaReceptor.objects.select_related(
+        "informe",
+        "informe__Estudiante",
+    ).all()
+    serializer_class = InformeFamiliaReceptorSerializer
+    establishment_lookup = "informe__Estudiante__establecimiento_id"
+
+
+class RegistroPIEViewSet(RoleScopedViewSet):
+    queryset = (
+        RegistroPIE.objects.select_related("curso", "curso__establecimiento", "responsable")
+        .prefetch_related(
+            "equipo_aula",
+            "trabajos_colaborativos",
+            "actividades_comunidad",
+            "logros",
+        )
+        .all()
+        .order_by("-fecha_creacion")
+    )
     serializer_class = RegistroPIESerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["curso__nombre", "periodo", "curso__establecimiento__nombre"]
+    establishment_lookup = "curso__establecimiento_id"
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        curso_id = self.request.query_params.get("curso")
+        if curso_id:
+            queryset = queryset.filter(curso_id=curso_id)
+        return queryset
+
+    def filter_for_externo(self, queryset):
+        return queryset.filter(responsable=self.request.user)
 
 
-class EquipoAulaViewSet(viewsets.ModelViewSet):
-    queryset = EquipoAula.objects.all()
+class RegistroPDERelatedViewSet(RoleScopedViewSet):
+    establishment_lookup = "registro__curso__establecimiento_id"
+
+    def filter_for_externo(self, queryset):
+        return queryset.filter(registro__responsable=self.request.user)
+
+
+class EquipoAulaViewSet(RegistroPDERelatedViewSet):
+    queryset = EquipoAula.objects.select_related("registro", "registro__curso").all()
     serializer_class = EquipoAulaSerializer
 
 
-class PlanificacionPIEViewSet(viewsets.ModelViewSet):
-    queryset = PlanificacionPIE.objects.all()
+class PlanificacionPIEViewSet(RegistroPDERelatedViewSet):
+    queryset = PlanificacionPIE.objects.select_related("registro").all()
     serializer_class = PlanificacionPIESerializer
 
 
-class TrabajoColaborativoViewSet(viewsets.ModelViewSet):
-    queryset = TrabajoColaborativo.objects.all()
+class TrabajoColaborativoViewSet(RegistroPDERelatedViewSet):
+    queryset = TrabajoColaborativo.objects.select_related("registro").all()
     serializer_class = TrabajoColaborativoSerializer
 
 
-class ActividadComunidadViewSet(viewsets.ModelViewSet):
-    queryset = ActividadComunidad.objects.all()
+class ActividadComunidadViewSet(RegistroPDERelatedViewSet):
+    queryset = ActividadComunidad.objects.select_related("registro").all()
     serializer_class = ActividadComunidadSerializer
 
 
-class LogroAprendizajeViewSet(viewsets.ModelViewSet):
-    queryset = LogroAprendizaje.objects.all()
+class LogroAprendizajeViewSet(RegistroPDERelatedViewSet):
+    queryset = LogroAprendizaje.objects.select_related("registro", "estudiante").all()
     serializer_class = LogroAprendizajeSerializer
 
 
-class EvaluacionPIEViewSet(viewsets.ModelViewSet):
-    queryset = EvaluacionPIE.objects.all()
+class EvaluacionPIEViewSet(RegistroPDERelatedViewSet):
+    queryset = EvaluacionPIE.objects.select_related("registro").all()
     serializer_class = EvaluacionPIESerializer
 
 
-@api_view(['GET'])
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def generar_registro_pie_pdf(request, registro_id):
-    from core.utils.pdf_generator import generar_pdf_registro_pie
     try:
         registro = RegistroPIE.objects.get(pk=registro_id)
         pdf_path = generar_pdf_registro_pie(registro)
         return Response({"pdf": pdf_path})
     except RegistroPIE.DoesNotExist:
         return Response({"error": "Registro PIE no encontrado"}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(["POST"])
+def password_reset_request(request):
+    email = request.data.get("email")
+    try:
+        user = Usuario.objects.get(email=email)
+    except Usuario.DoesNotExist:
+        return Response({"error": "No existe un usuario con ese correo."}, status=status.HTTP_404_NOT_FOUND)
 
-class SubdimensionAreaViewSet(viewsets.ModelViewSet):
-    queryset = SubdimensionArea.objects.all()
-    serializer_class = SubdimensionAreaSerializer
+    token = default_token_generator.make_token(user)
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    reset_link = f"http://tusitio.cl/password-reset/confirm/{uid}/{token}/"
 
-
-
-
-class TrayectoriaEscolarViewSet(viewsets.ModelViewSet):
-    queryset = TrayectoriaEscolar.objects.all()
-    serializer_class = TrayectoriaEscolarSerializer
-
-
-
-class SituacionEscolarViewSet(viewsets.ModelViewSet):
-    queryset = SituacionEscolar.objects.all()
-    serializer_class = SituacionEscolarSerializer
-
-
-
-class ObservacionItemViewSet(viewsets.ModelViewSet):
-    queryset = ObservacionItem.objects.all()
-    serializer_class = ObservacionItemSerializer
+    send_mail(
+        "Restablecer contraseña",
+        f"Hola {user.first_name or user.username}, usa este enlace para restablecer tu contraseña: {reset_link}",
+        "no-reply@pie.cl",
+        [user.email],
+        fail_silently=False,
+    )
+    return Response({"message": "Correo de recuperación enviado correctamente."})
 
 
+@api_view(["POST"])
+def password_reset_verify(request):
+    uidb64 = request.data.get("uid")
+    token = request.data.get("token")
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = Usuario.objects.get(pk=uid)
+    except Exception:
+        return Response({"error": "Solicitud inválida."}, status=status.HTTP_400_BAD_REQUEST)
 
-class ObservacionEscolarViewSet(viewsets.ModelViewSet):
-    queryset = ObservacionEscolar.objects.all().order_by('-fecha')
-    serializer_class = ObservacionEscolarSerializer
+    if default_token_generator.check_token(user, token):
+        return Response({"message": "Token válido."})
+    return Response({"error": "Token inválido o expirado."}, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(["POST"])
+def password_reset_confirm(request):
+    uidb64 = request.data.get("uid")
+    token = request.data.get("token")
+    new_password = request.data.get("new_password")
 
-class EvaluacionPsicopedagogicaViewSet(viewsets.ModelViewSet):
-    queryset = EvaluacionPsicopedagogica.objects.all()
-    serializer_class = EvaluacionPsicopedagogicaSerializer
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = Usuario.objects.get(pk=uid)
+    except Exception:
+        return Response({"error": "Solicitud inválida."}, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=True, methods=['get'])
-    def pdf(self, request, pk=None):
-        evaluacion = get_object_or_404(EvaluacionPsicopedagogica, pk=pk)
-        html = render_to_string('core/psico_pdf.html', {'evaluacion': evaluacion})
-        response = HttpResponse(content_type='application/pdf')
-        pisa.CreatePDF(html, dest=response)
-        return response
+    if not default_token_generator.check_token(user, token):
+        return Response({"error": "Token inválido o expirado."}, status=status.HTTP_400_BAD_REQUEST)
 
-class SubdimensionItemViewSet(viewsets.ModelViewSet):
-    queryset = SubdimensionItem.objects.all()
-    serializer_class = SubdimensionItemSerializer
-
-class SubsectorViewSet(viewsets.ModelViewSet):
-    queryset = Subsector.objects.all()
-    serializer_class = SubsectorSerializer
-
-class EstrategiaApoyoViewSet(viewsets.ModelViewSet):
-    queryset = EstrategiaApoyo.objects.all()
-    serializer_class = EstrategiaApoyoSerializer
-
-class ApoyoAdicionalViewSet(viewsets.ModelViewSet):
-    queryset = ApoyoAdicional.objects.all()
-    serializer_class = ApoyoAdicionalSerializer
+    user.set_password(new_password)
+    user.save()
+    return Response({"message": "Contraseña restablecida correctamente."})

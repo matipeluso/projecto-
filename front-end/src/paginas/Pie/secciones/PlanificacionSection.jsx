@@ -11,7 +11,11 @@ export default function PlanificacionSection({ registroId, value, setValue, onSa
     <section>
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h5 className="mb-0">Planificación del Proceso Educativo</h5>
-        <button className="btn btn-primary btn-sm" onClick={() => onSave({ ...value, registro: registroId })}>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => onSave({ ...value, registro: registroId })}
+        >
           Guardar sección
         </button>
       </div>

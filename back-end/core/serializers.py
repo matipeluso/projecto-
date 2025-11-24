@@ -1,85 +1,384 @@
+import re
 
+from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import serializers
-from .models import *
 
-# ================================================================
-# 1. SERIALIZADORES BASE
-# ================================================================
+from .models import (
+    ActividadComunidad,
+    Anamnesis,
+    AntecedenteSalud,
+    AntecedentesSaludFormulario,
+    Apoderado,
+    ApoyoAdicional,
+    Curso,
+    DetalleEvaluacionSalud,
+    EquipoAula,
+    Establecimiento,
+    Estudiante,
+    Especialidad,
+    EstrategiaApoyo,
+    EvaluacionAmbienteEscolar,
+    EvaluacionLenguaje,
+    EvaluacionNeuropsicologica,
+    EvaluacionPIE,
+    EvaluacionPsicologica,
+    EvaluacionPsicopedagogica,
+    EvaluacionSalud,
+    FormularioEvaluacionSalud,
+    InformeEvaluacionSalud,
+    InformeFamilia,
+    InformeFamiliaAmbito,
+    InformeFamiliaEntrega,
+    InformeFamiliaInstrumento,
+    InformeFamiliaReceptor,
+    InformeFamiliaSeguimiento,
+    Informante,
+    Entrevistador,
+    ItemAmbienteEscolar,
+    LogroAprendizaje,
+    ObservacionAmbiente,
+    ObservacionEscolar,
+    ObservacionItem,
+    PlanificacionPIE,
+    RegistroPIE,
+    SituacionEscolar,
+    SubdimensionArea,
+    SubdimensionComentario,
+    SubdimensionItem,
+    Subsector,
+    TrabajoColaborativo,
+    TrayectoriaEscolar,
+    Usuario,
+)
 
-class EstablecimientoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Establecimiento
-        fields = '__all__'
+
+UsuarioModel = get_user_model()
+
+
+def normalizar_rut(value):
+    if not value:
+        return value
+    clean = re.sub(r"[^0-9kK]", "", value)
+    if len(clean) < 2:
+        raise serializers.ValidationError("El RUT está incompleto.")
+    cuerpo, dv = clean[:-1], clean[-1].upper()
+    if not cuerpo.isdigit():
+        raise serializers.ValidationError("El RUT solo puede contener números antes del dígito verificador.")
+    multiplicador = 2
+    total = 0
+    for digit in reversed(cuerpo):
+        total += int(digit) * multiplicador
+        multiplicador = 2 if multiplicador == 7 else multiplicador + 1
+    resto = total % 11
+    dv_esperado = "0" if resto == 0 else "K" if resto == 1 else str(11 - resto)
+    if dv_esperado != dv:
+        raise serializers.ValidationError("El RUT no es válido.")
+    cuerpo_normalizado = cuerpo.lstrip("0") or "0"
+    return f"{cuerpo_normalizado}-{dv}"
+
 
 class EspecialidadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Especialidad
-        fields = '__all__'
+        fields = "__all__"
 
 
-class UsuarioSerializer(serializers.ModelSerializer):
-    especialidad = EspecialidadSerializer(read_only=True)
-    especialidad_id = serializers.PrimaryKeyRelatedField(
-        source='especialidad', queryset=Especialidad.objects.all(), write_only=True, required=False
-    )
-
+class EstablecimientoSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Usuario
-        fields = '__all__'
+        model = Establecimiento
+        fields = [
+            "id",
+            "nombre",
+            "rbd",
+            "direccion",
+            "comuna",
+            "region",
+            "telefono",
+            "email",
+            "tipo_dependencia",
+        ]
 
 
 class CursoSerializer(serializers.ModelSerializer):
+    establecimiento = EstablecimientoSerializer(read_only=True)
+    establecimiento_id = serializers.PrimaryKeyRelatedField(
+        queryset=Establecimiento.objects.all(),
+        source="establecimiento",
+        write_only=True,
+    )
+
     class Meta:
         model = Curso
-        fields = '__all__'
+        fields = ["id", "nombre", "nivel", "anio_escolar", "establecimiento", "establecimiento_id"]
 
 
 class ApoderadoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Apoderado
-        fields = '__all__'
+        fields = [
+            "id",
+            "nombres_apellidos",
+            "run",
+            "telefono",
+            "correo",
+            "direccion",
+            "parentesco",
+            "ocupacion",
+            "escolaridad",
+        ]
+
+
+class UsuarioSerializer(serializers.ModelSerializer):
+    especialidad = EspecialidadSerializer(read_only=True)
+    establecimiento = EstablecimientoSerializer(read_only=True)
+    especialidad_id = serializers.PrimaryKeyRelatedField(
+        queryset=Especialidad.objects.all(),
+        source="especialidad",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+    establecimiento_id = serializers.PrimaryKeyRelatedField(
+        queryset=Establecimiento.objects.all(),
+        source="establecimiento",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = UsuarioModel
+        fields = [
+            "id",
+            "username",
+            "password",
+            "first_name",
+            "last_name",
+            "email",
+            "telefono",
+            "rut",
+            "cargo",
+            "tipo",
+            "especialidad",
+            "especialidad_id",
+            "establecimiento",
+            "establecimiento_id",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+        ]
+
+    @staticmethod
+    def _normalize_bool(value):
+        if isinstance(value, bool) or value is None:
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "t", "yes", "si", "on"}
+        return bool(value)
+
+    def validate(self, attrs):
+        for field in ("is_active", "is_staff", "is_superuser"):
+            if field in attrs:
+                attrs[field] = self._normalize_bool(attrs[field])
+        if attrs.get("telefono") == "":
+            attrs["telefono"] = None
+        if attrs.get("rut") == "":
+            attrs["rut"] = None
+        if attrs.get("rut"):
+            attrs["rut"] = normalizar_rut(attrs["rut"])
+        if attrs.get("cargo") == "":
+            attrs["cargo"] = None
+        return attrs
+
+    def validate_email(self, value):
+        qs = UsuarioModel.objects.filter(email__iexact=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("El email ya está en uso.")
+        return value
+
+    def validate_username(self, value):
+        qs = UsuarioModel.objects.filter(username__iexact=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("El nombre de usuario ya está en uso.")
+        return value
+
+    def validate_rut(self, value):
+        if not value:
+            return value
+        value = normalizar_rut(value)
+        qs = UsuarioModel.objects.filter(rut__iexact=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("El RUT ya está en uso.")
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop("password", None)
+        if not password:
+            raise serializers.ValidationError({"password": "La contraseña es obligatoria al crear un usuario."})
+        usuario = UsuarioModel(**validated_data)
+        usuario.set_password(password)
+        usuario.save()
+        return usuario
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop("password", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        return instance
+
+
+class UsuarioPerfilSerializer(serializers.ModelSerializer):
+    especialidad = EspecialidadSerializer(read_only=True)
+    establecimiento = EstablecimientoSerializer(read_only=True)
+
+    class Meta:
+        model = UsuarioModel
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+             "telefono",
+            "rut",
+            "cargo",
+            "tipo",
+            "is_staff",
+            "is_superuser",
+            "especialidad",
+            "establecimiento",
+        ]
 
 
 class EstudianteSerializer(serializers.ModelSerializer):
     curso = CursoSerializer(read_only=True)
     curso_id = serializers.PrimaryKeyRelatedField(
-        source='curso', queryset=Curso.objects.all(), write_only=True, required=False
+        queryset=Curso.objects.all(),
+        source="curso",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+    establecimiento = EstablecimientoSerializer(read_only=True)
+    establecimiento_id = serializers.PrimaryKeyRelatedField(
+        queryset=Establecimiento.objects.all(),
+        source="establecimiento",
+        write_only=True,
+        required=False,
+        allow_null=True,
     )
     apoderado = ApoderadoSerializer(read_only=True)
     apoderado_id = serializers.PrimaryKeyRelatedField(
-        source='apoderado', queryset=Apoderado.objects.all(), write_only=True, required=False
+        queryset=Apoderado.objects.all(),
+        source="apoderado",
+        write_only=True,
+        required=False,
+        allow_null=True,
     )
 
     class Meta:
         model = Estudiante
-        fields = '__all__'
+        fields = [
+            "id",
+            "run",
+            "nombres_apellidos",
+            "nombre_social",
+            "genero",
+            "fecha_nacimiento",
+            "nacionalidad",
+            "lengua_origen",
+            "lengua_uso",
+            "direccion",
+            "telefono",
+            "via_comunicacion",
+            "dominio_lengua_origen",
+            "dominio_lengua_uso",
+            "curso",
+            "curso_id",
+            "establecimiento",
+            "establecimiento_id",
+            "apoderado",
+            "apoderado_id",
+        ]
 
-
-# ================================================================
-# 3. ANAMNESIS
-# ================================================================
 
 class InformanteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Informante
-        fields = '__all__'
+        fields = ["id", "nombre", "relacion_estudiante", "fecha_entrevista", "presencia"]
+
 
 class EntrevistadorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Entrevistador
-        fields = '__all__'
+        fields = ["id", "nombre", "rol_cargo"]
+
 
 class AntecedenteSaludSerializer(serializers.ModelSerializer):
+    estudiante_id = serializers.PrimaryKeyRelatedField(
+        queryset=Estudiante.objects.all(), write_only=True, required=False, allow_null=True
+    )
+
     class Meta:
         model = AntecedenteSalud
-        fields = '__all__'
+        fields = "__all__"
+        extra_kwargs = {
+            "anamnesis": {"required": False, "allow_null": True},
+        }
 
     def validate(self, data):
-        if data.get('peso') is not None and data['peso'] <= 0:
+        if data.get("peso") is not None and data["peso"] <= 0:
             raise serializers.ValidationError("El peso debe ser positivo.")
-        if data.get('talla') is not None and data['talla'] <= 0:
+        if data.get("talla") is not None and data["talla"] <= 0:
             raise serializers.ValidationError("La talla debe ser positiva.")
+        if not (data.get("anamnesis") or data.get("estudiante_id") or (self.instance and self.instance.anamnesis_id)):
+            raise serializers.ValidationError({"anamnesis": "Debes seleccionar un estudiante o una anamnesis."})
         return data
+
+    def _apply_profesional_snapshot(self, attrs):
+        profesional = attrs.get("profesional")
+        if not profesional:
+            request = self.context.get("request") if hasattr(self, "context") else None
+            if request and request.user.is_authenticated:
+                profesional = request.user
+                attrs.setdefault("profesional", profesional)
+        if not profesional:
+            return attrs
+        if not attrs.get("rut_profesional") and getattr(profesional, "rut", None):
+            attrs["rut_profesional"] = profesional.rut
+        if not attrs.get("cargo_profesional"):
+            cargo = getattr(profesional, "cargo", None) or (
+                profesional.especialidad.nombre if getattr(profesional, "especialidad", None) else None
+            )
+            if cargo:
+                attrs["cargo_profesional"] = cargo
+        if not attrs.get("especialidad") and getattr(profesional, "especialidad", None):
+            attrs["especialidad"] = profesional.especialidad.nombre
+        return attrs
+
+    def create(self, validated_data):
+        estudiante = validated_data.pop("estudiante_id", None)
+        if not validated_data.get("anamnesis") and estudiante:
+            validated_data["anamnesis"] = Anamnesis.objects.create(estudiante=estudiante)
+        validated_data = self._apply_profesional_snapshot(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop("estudiante_id", None)
+        validated_data = self._apply_profesional_snapshot(validated_data)
+        return super().update(instance, validated_data)
+
 
 class AnamnesisSerializer(serializers.ModelSerializer):
     informantes = InformanteSerializer(many=True, read_only=True)
@@ -88,16 +387,36 @@ class AnamnesisSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Anamnesis
-        fields = '__all__'
+        fields = [
+            "id",
+            "estudiante",
+            "fecha",
+            "definicion_problema",
+            "observaciones_generales",
+            "pdf_generado",
+            "informantes",
+            "entrevistadores",
+            "antecedentes_salud",
+        ]
 
-# ================================================================
-# 4. EVALUACIÓN PSICOPEDAGÓGICA
-# ================================================================
+
+class SubdimensionAreaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubdimensionArea
+        fields = "__all__"
+
 
 class SubdimensionItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubdimensionItem
-        fields = '__all__'
+        fields = ["id", "area", "descripcion", "valor"]
+
+
+class SubdimensionComentarioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubdimensionComentario
+        fields = ["id", "area", "fortaleza", "debilidad", "sintesis", "observaciones"]
+
 
 class SubsectorSerializer(serializers.ModelSerializer):
     class Meta:
@@ -108,128 +427,188 @@ class SubsectorSerializer(serializers.ModelSerializer):
 class EstrategiaApoyoSerializer(serializers.ModelSerializer):
     class Meta:
         model = EstrategiaApoyo
-        fields = '__all__'
+        fields = ["id", "descripcion", "aplicada", "exitosa", "numero", "detalle"]
+
 
 class ApoyoAdicionalSerializer(serializers.ModelSerializer):
     class Meta:
         model = ApoyoAdicional
-        fields = '__all__'
+        fields = ["id", "tipo", "apoyo", "recibido", "descripcion_extra", "nota"]
+
+
+class ObservacionAmbienteNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ObservacionAmbiente
+        fields = ["id", "item", "descripcion", "valor"]
+        read_only_fields = ["id"]
+
 
 class EvaluacionPsicopedagogicaSerializer(serializers.ModelSerializer):
-    items = SubdimensionItemSerializer(many=True, read_only=True)
-    subsectores = SubsectorSerializer(many=True, read_only=True)
-    estrategias_apoyo = EstrategiaApoyoSerializer(many=True, read_only=True)
-    apoyos_adicionales = ApoyoAdicionalSerializer(many=True, read_only=True)
+    estudiante = serializers.PrimaryKeyRelatedField(queryset=Estudiante.objects.all())
+    evaluador_usuario = serializers.PrimaryKeyRelatedField(
+        queryset=UsuarioModel.objects.all(), required=False, allow_null=True
+    )
+    items = SubdimensionItemSerializer(many=True, required=False)
+    comentarios_subdimension = SubdimensionComentarioSerializer(many=True, required=False)
+    subsectores = SubsectorSerializer(many=True, required=False)
+    estrategias_apoyo = EstrategiaApoyoSerializer(many=True, required=False)
+    apoyos_adicionales = ApoyoAdicionalSerializer(many=True, required=False)
+    observaciones_ambiente = ObservacionAmbienteNestedSerializer(many=True, required=False)
 
     class Meta:
         model = EvaluacionPsicopedagogica
-        fields = '__all__'
+        fields = [
+            "id",
+            "estudiante",
+            "evaluador_usuario",
+            "evaluador",
+            "rol_evaluador",
+            "fecha",
+            "fecha_evaluacion",
+            "firma",
+            "observaciones",
+            "edad_anios",
+            "edad_meses",
+            "lengua_materna_grado",
+            "lengua_materna_comprende",
+            "lengua_materna_habla",
+            "lengua_materna_lee",
+            "lengua_materna_escribe",
+            "lengua_uso_grado",
+            "lengua_uso_comprende",
+            "lengua_uso_habla",
+            "lengua_uso_lee",
+            "lengua_uso_escribe",
+            "pdf_generado",
+            "items",
+            "comentarios_subdimension",
+            "subsectores",
+            "estrategias_apoyo",
+            "apoyos_adicionales",
+            "observaciones_ambiente",
+        ]
+
+    _nested_field_keys = (
+        "items",
+        "subsectores",
+        "estrategias_apoyo",
+        "apoyos_adicionales",
+        "comentarios_subdimension",
+        "observaciones_ambiente",
+    )
+
+    def _pop_nested_payloads(self, validated_data):
+        payloads = {}
+        for key in self._nested_field_keys:
+            if key in validated_data:
+                payloads[key] = (True, validated_data.pop(key))
+            else:
+                payloads[key] = (False, [])
+        return payloads
+
+    @staticmethod
+    def _replace_collection(instance, manager, model_cls, payload):
+        manager.all().delete()
+        if not payload:
+            return
+        model_cls.objects.bulk_create([model_cls(evaluacion=instance, **attrs) for attrs in payload])
+
+    def _sync_nested_relations(self, instance, nested_payloads, *, force=False):
+        relations = (
+            (instance.items, SubdimensionItem, "items"),
+            (instance.subsectores, Subsector, "subsectores"),
+            (instance.estrategias_apoyo, EstrategiaApoyo, "estrategias_apoyo"),
+            (instance.apoyos_adicionales, ApoyoAdicional, "apoyos_adicionales"),
+            (instance.comentarios_subdimension, SubdimensionComentario, "comentarios_subdimension"),
+            (instance.observaciones_ambiente, ObservacionAmbiente, "observaciones_ambiente"),
+        )
+
+        for manager, model_cls, key in relations:
+            provided, payload = nested_payloads[key]
+            if not provided and not force:
+                continue
+            self._replace_collection(instance, manager, model_cls, payload)
 
     def create(self, validated_data):
-        subsectores_data = validated_data.pop("subsectores", [])
-        evaluacion = EvaluacionPsicopedagogica.objects.create(**validated_data)
+        nested_payloads = self._pop_nested_payloads(validated_data)
 
-        for s in subsectores_data:
-            Subsector.objects.create(evaluacion=evaluacion, **s)
-
+        with transaction.atomic():
+            evaluacion = EvaluacionPsicopedagogica.objects.create(**validated_data)
+            self._sync_nested_relations(evaluacion, nested_payloads, force=True)
         return evaluacion
-# ================================================================
-# 5. EVALUACIÓN DE SALUD
-# ================================================================
 
-class EvaluacionSaludSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EvaluacionSalud
-        fields = '__all__'
+    def update(self, instance, validated_data):
+        nested_payloads = self._pop_nested_payloads(validated_data)
 
-# ================================================================
-# 6. INFORME PARA LA FAMILIA
-# ================================================================
+        with transaction.atomic():
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
 
-class InformeFamiliaInstrumentoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InformeFamiliaInstrumento
-        fields = '__all__'
+            self._sync_nested_relations(instance, nested_payloads, force=not self.partial)
+        return instance
 
-class InformeFamiliaAmbitoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InformeFamiliaAmbito
-        fields = '__all__'
-
-class InformeFamiliaSeguimientoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InformeFamiliaSeguimiento
-        fields = '__all__'
-
-class InformeFamiliaEntregaSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InformeFamiliaEntrega
-        fields = '__all__'
-
-class InformeFamiliaReceptorSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InformeFamiliaReceptor
-        fields = '__all__'
-
-class InformeFamiliaSerializer(serializers.ModelSerializer):
-    instrumentos = InformeFamiliaInstrumentoSerializer(many=True, read_only=True)
-    ambitos = InformeFamiliaAmbitoSerializer(many=True, read_only=True)
-    seguimientos = InformeFamiliaSeguimientoSerializer(many=True, read_only=True)
-    entrega = InformeFamiliaEntregaSerializer(many=True, read_only=True)
-    receptores = InformeFamiliaReceptorSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = InformeFamilia
-        fields = '__all__'
-
-
-
-
-# ================================================================
-# SERIALIZERS – REGISTRO PIE
-# ================================================================
 
 class EquipoAulaSerializer(serializers.ModelSerializer):
     class Meta:
         model = EquipoAula
-        fields = '__all__'
+        fields = "__all__"
 
 
 class PlanificacionPIESerializer(serializers.ModelSerializer):
     class Meta:
         model = PlanificacionPIE
-        fields = '__all__'
+        fields = "__all__"
 
 
 class TrabajoColaborativoSerializer(serializers.ModelSerializer):
     class Meta:
         model = TrabajoColaborativo
-        fields = '__all__'
+        fields = "__all__"
 
 
 class ActividadComunidadSerializer(serializers.ModelSerializer):
     class Meta:
         model = ActividadComunidad
-        fields = '__all__'
+        fields = "__all__"
 
 
 class LogroAprendizajeSerializer(serializers.ModelSerializer):
+    estudiante = EstudianteSerializer(read_only=True)
+    estudiante_id = serializers.PrimaryKeyRelatedField(
+        queryset=Estudiante.objects.all(),
+        source="estudiante",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = LogroAprendizaje
-        fields = '__all__'
+        fields = "__all__"
 
 
 class EvaluacionPIESerializer(serializers.ModelSerializer):
     class Meta:
         model = EvaluacionPIE
-        fields = '__all__'
+        fields = "__all__"
 
 
 class RegistroPIESerializer(serializers.ModelSerializer):
-    """
-    Incluye los subcomponentes (equipo, planificación, logros, etc.)
-    para mostrar todo el registro completo.
-    """
+    curso = CursoSerializer(read_only=True)
+    curso_id = serializers.PrimaryKeyRelatedField(
+        queryset=Curso.objects.all(),
+        source="curso",
+        write_only=True,
+    )
+    responsable = UsuarioPerfilSerializer(read_only=True)
+    responsable_id = serializers.PrimaryKeyRelatedField(
+        queryset=UsuarioModel.objects.all(),
+        source="responsable",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
     equipo_aula = EquipoAulaSerializer(many=True, read_only=True)
     trabajos_colaborativos = TrabajoColaborativoSerializer(many=True, read_only=True)
     actividades_comunidad = ActividadComunidadSerializer(many=True, read_only=True)
@@ -239,139 +618,344 @@ class RegistroPIESerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RegistroPIE
-        fields = '__all__'
+        fields = "__all__"
 
 
+class EvaluacionSaludSerializer(serializers.ModelSerializer):
+    estudiante = EstudianteSerializer(read_only=True)
+    estudiante_id = serializers.PrimaryKeyRelatedField(
+        queryset=Estudiante.objects.all(),
+        source="estudiante",
+        write_only=True,
+    )
 
-class SubdimensionAreaSerializer(serializers.ModelSerializer):
     class Meta:
-        model = SubdimensionArea
-        fields = '__all__'
+        model = EvaluacionSalud
+        fields = "__all__"
+
+    def _apply_profesional_snapshot(self, attrs):
+        profesional = attrs.get("profesional")
+        if not profesional:
+            request = self.context.get("request") if hasattr(self, "context") else None
+            if request and request.user.is_authenticated:
+                profesional = request.user
+                attrs.setdefault("profesional", profesional)
+        if not profesional:
+            return attrs
+        if not attrs.get("rut_profesional") and getattr(profesional, "rut", None):
+            attrs["rut_profesional"] = profesional.rut
+        if not attrs.get("cargo_profesional"):
+            cargo = getattr(profesional, "cargo", None) or (
+                profesional.especialidad.nombre if getattr(profesional, "especialidad", None) else None
+            )
+            if cargo:
+                attrs["cargo_profesional"] = cargo
+        if not attrs.get("especialidad") and getattr(profesional, "especialidad", None):
+            attrs["especialidad"] = profesional.especialidad.nombre
+        return attrs
+
+    def create(self, validated_data):
+        validated_data = self._apply_profesional_snapshot(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data = self._apply_profesional_snapshot(validated_data)
+        return super().update(instance, validated_data)
 
 
+class DetalleEvaluacionSaludSerializer(serializers.ModelSerializer):
+    formulario = serializers.PrimaryKeyRelatedField(read_only=True)
+    formulario_id = serializers.PrimaryKeyRelatedField(
+        queryset=FormularioEvaluacionSalud.objects.all(),
+        source="formulario",
+        write_only=True,
+    )
+
+    class Meta:
+        model = DetalleEvaluacionSalud
+        fields = "__all__"
+
+
+class AntecedentesSaludFormularioSerializer(serializers.ModelSerializer):
+    formulario = serializers.PrimaryKeyRelatedField(read_only=True)
+    formulario_id = serializers.PrimaryKeyRelatedField(
+        queryset=FormularioEvaluacionSalud.objects.all(),
+        source="formulario",
+        write_only=True,
+    )
+
+    class Meta:
+        model = AntecedentesSaludFormulario
+        fields = "__all__"
+
+
+class EvaluacionPsicologicaSerializer(serializers.ModelSerializer):
+    formulario = serializers.PrimaryKeyRelatedField(read_only=True)
+    formulario_id = serializers.PrimaryKeyRelatedField(
+        queryset=FormularioEvaluacionSalud.objects.all(),
+        source="formulario",
+        write_only=True,
+    )
+
+    class Meta:
+        model = EvaluacionPsicologica
+        fields = "__all__"
+
+
+class EvaluacionLenguajeSerializer(serializers.ModelSerializer):
+    formulario = serializers.PrimaryKeyRelatedField(read_only=True)
+    formulario_id = serializers.PrimaryKeyRelatedField(
+        queryset=FormularioEvaluacionSalud.objects.all(),
+        source="formulario",
+        write_only=True,
+    )
+
+    class Meta:
+        model = EvaluacionLenguaje
+        fields = "__all__"
+
+
+class EvaluacionNeuropsicologicaSerializer(serializers.ModelSerializer):
+    formulario = serializers.PrimaryKeyRelatedField(read_only=True)
+    formulario_id = serializers.PrimaryKeyRelatedField(
+        queryset=FormularioEvaluacionSalud.objects.all(),
+        source="formulario",
+        write_only=True,
+    )
+
+    class Meta:
+        model = EvaluacionNeuropsicologica
+        fields = "__all__"
+
+
+class InformeEvaluacionSaludSerializer(serializers.ModelSerializer):
+    formulario = serializers.PrimaryKeyRelatedField(read_only=True)
+    formulario_id = serializers.PrimaryKeyRelatedField(
+        queryset=FormularioEvaluacionSalud.objects.all(),
+        source="formulario",
+        write_only=True,
+    )
+
+    class Meta:
+        model = InformeEvaluacionSalud
+        fields = "__all__"
+
+
+class FormularioEvaluacionSaludSerializer(serializers.ModelSerializer):
+    estudiante = EstudianteSerializer(read_only=True)
+    estudiante_id = serializers.PrimaryKeyRelatedField(
+        queryset=Estudiante.objects.all(),
+        source="estudiante",
+        write_only=True,
+    )
+    profesional = UsuarioPerfilSerializer(read_only=True)
+    profesional_id = serializers.PrimaryKeyRelatedField(
+        queryset=UsuarioModel.objects.all(),
+        source="profesional",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+    detalles = DetalleEvaluacionSaludSerializer(many=True, read_only=True)
+    antecedentes_salud = AntecedentesSaludFormularioSerializer(many=True, read_only=True)
+    evaluaciones_psicologicas = EvaluacionPsicologicaSerializer(many=True, read_only=True)
+    evaluaciones_lenguaje = EvaluacionLenguajeSerializer(many=True, read_only=True)
+    evaluaciones_neuropsicologicas = EvaluacionNeuropsicologicaSerializer(many=True, read_only=True)
+    informes_evaluacion_salud = InformeEvaluacionSaludSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = FormularioEvaluacionSalud
+        fields = "__all__"
+
+
+class InformeFamiliaInstrumentoSerializer(serializers.ModelSerializer):
+    informe = serializers.PrimaryKeyRelatedField(read_only=True)
+    informe_id = serializers.PrimaryKeyRelatedField(
+        queryset=InformeFamilia.objects.all(),
+        source="informe",
+        write_only=True,
+    )
+
+    class Meta:
+        model = InformeFamiliaInstrumento
+        fields = "__all__"
+
+
+class InformeFamiliaAmbitoSerializer(serializers.ModelSerializer):
+    informe = serializers.PrimaryKeyRelatedField(read_only=True)
+    informe_id = serializers.PrimaryKeyRelatedField(
+        queryset=InformeFamilia.objects.all(),
+        source="informe",
+        write_only=True,
+    )
+
+    class Meta:
+        model = InformeFamiliaAmbito
+        fields = "__all__"
+
+
+class InformeFamiliaSeguimientoSerializer(serializers.ModelSerializer):
+    informe = serializers.PrimaryKeyRelatedField(read_only=True)
+    informe_id = serializers.PrimaryKeyRelatedField(
+        queryset=InformeFamilia.objects.all(),
+        source="informe",
+        write_only=True,
+    )
+
+    class Meta:
+        model = InformeFamiliaSeguimiento
+        fields = "__all__"
+
+
+class InformeFamiliaEntregaSerializer(serializers.ModelSerializer):
+    informe = serializers.PrimaryKeyRelatedField(read_only=True)
+    informe_id = serializers.PrimaryKeyRelatedField(
+        queryset=InformeFamilia.objects.all(),
+        source="informe",
+        write_only=True,
+    )
+
+    class Meta:
+        model = InformeFamiliaEntrega
+        fields = "__all__"
+
+
+class InformeFamiliaReceptorSerializer(serializers.ModelSerializer):
+    informe = serializers.PrimaryKeyRelatedField(read_only=True)
+    informe_id = serializers.PrimaryKeyRelatedField(
+        queryset=InformeFamilia.objects.all(),
+        source="informe",
+        write_only=True,
+    )
+
+    class Meta:
+        model = InformeFamiliaReceptor
+        fields = "__all__"
+
+
+class InformeFamiliaSerializer(serializers.ModelSerializer):
+    estudiante = EstudianteSerializer(read_only=True, source="Estudiante")
+    estudiante_id = serializers.PrimaryKeyRelatedField(
+        queryset=Estudiante.objects.all(),
+        source="Estudiante",
+        write_only=True,
+    )
+    instrumentos = InformeFamiliaInstrumentoSerializer(many=True, read_only=True)
+    ambitos = InformeFamiliaAmbitoSerializer(many=True, read_only=True)
+    seguimientos = InformeFamiliaSeguimientoSerializer(many=True, read_only=True)
+    entrega = InformeFamiliaEntregaSerializer(many=True, read_only=True)
+    receptores = InformeFamiliaReceptorSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = InformeFamilia
+        fields = "__all__"
 
 
 class TrayectoriaEscolarSerializer(serializers.ModelSerializer):
     estudiante = EstudianteSerializer(read_only=True)
     estudiante_id = serializers.PrimaryKeyRelatedField(
-        source='estudiante',
         queryset=Estudiante.objects.all(),
-        write_only=True
+        source="estudiante",
+        write_only=True,
     )
 
     class Meta:
         model = TrayectoriaEscolar
-        fields = '__all__'
+        fields = "__all__"
 
 
 class SituacionEscolarSerializer(serializers.ModelSerializer):
     estudiante = EstudianteSerializer(read_only=True)
     estudiante_id = serializers.PrimaryKeyRelatedField(
-        source='estudiante',
         queryset=Estudiante.objects.all(),
-        write_only=True
+        source="estudiante",
+        write_only=True,
     )
 
     class Meta:
         model = SituacionEscolar
-        fields = '__all__'
-
+        fields = "__all__"
 
 
 class ObservacionItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = ObservacionItem
-        fields = '__all__'
+        fields = "__all__"
 
 
 class ObservacionEscolarSerializer(serializers.ModelSerializer):
-    items = ObservacionItemSerializer(many=True, read_only=True)
-
+    items = ObservacionItemSerializer(many=True, required=False)
     evaluacion = EvaluacionPsicopedagogicaSerializer(read_only=True)
     evaluacion_id = serializers.PrimaryKeyRelatedField(
-        source='evaluacion',
         queryset=EvaluacionPsicopedagogica.objects.all(),
-        write_only=True
+        source="evaluacion",
+        write_only=True,
     )
 
     class Meta:
         model = ObservacionEscolar
-        fields = '__all__'
-
-
-
-class SubdimensionItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SubdimensionItem
-        fields = '__all__'
-
-class SubsectorSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Subsector
-        fields = '__all__'
-
-class EstrategiaApoyoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EstrategiaApoyo
-        fields = '__all__'
-
-class ApoyoAdicionalSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ApoyoAdicional
-        fields = '__all__'
-
-class EvaluacionPsicopedagogicaSerializer(serializers.ModelSerializer):
-    items = SubdimensionItemSerializer(many=True)
-    subsectores = SubsectorSerializer(many=True)
-    estrategias_apoyo = EstrategiaApoyoSerializer(many=True)
-    apoyos_adicionales = ApoyoAdicionalSerializer(many=True)
-    estudiante = serializers.PrimaryKeyRelatedField(queryset=Estudiante.objects.all())
-
-    class Meta:
-        model = EvaluacionPsicopedagogica
-        fields = [
-            'id', 'estudiante', 'evaluador', 'fecha', 'observaciones',
-            'items', 'subsectores', 'estrategias_apoyo', 'apoyos_adicionales'
-        ]
+        fields = "__all__"
 
     def create(self, validated_data):
-        items_data = validated_data.pop('items')
-        subsectores_data = validated_data.pop('subsectores')
-        estrategias_data = validated_data.pop('estrategias_apoyo')
-        apoyos_data = validated_data.pop('apoyos_adicionales')
-        evaluacion = EvaluacionPsicopedagogica.objects.create(**validated_data)
-        for item in items_data:
-            SubdimensionItem.objects.create(evaluacion=evaluacion, **item)
-        for sub in subsectores_data:
-            Subsector.objects.create(evaluacion=evaluacion, **sub)
-        for est in estrategias_data:
-            EstrategiaApoyo.objects.create(evaluacion=evaluacion, **est)
-        for ap in apoyos_data:
-            ApoyoAdicional.objects.create(evaluacion=evaluacion, **ap)
-        return evaluacion
+        items_data = validated_data.pop("items", None)
+        observacion = ObservacionEscolar.objects.create(**validated_data)
+        if items_data:
+            self._replace_items(observacion, items_data)
+        return observacion
 
     def update(self, instance, validated_data):
-        items_data = validated_data.pop('items')
-        subsectores_data = validated_data.pop('subsectores')
-        estrategias_data = validated_data.pop('estrategias_apoyo')
-        apoyos_data = validated_data.pop('apoyos_adicionales')
-
-        instance.evaluador = validated_data.get('evaluador', instance.evaluador)
-        instance.fecha = validated_data.get('fecha', instance.fecha)
-        instance.observaciones = validated_data.get('observaciones', instance.observaciones)
-        instance.estudiante = validated_data.get('estudiante', instance.estudiante)
+        items_data = validated_data.pop("items", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
         instance.save()
-
-        instance.items.all().delete()
-        for item in items_data:
-            SubdimensionItem.objects.create(evaluacion=instance, **item)
-        instance.subsectores.all().delete()
-        for sub in subsectores_data:
-            Subsector.objects.create(evaluacion=instance, **sub)
-        instance.estrategias_apoyo.all().delete()
-        for est in estrategias_data:
-            EstrategiaApoyo.objects.create(evaluacion=instance, **est)
-        instance.apoyos_adicionales.all().delete()
-        for ap in apoyos_data:
-            ApoyoAdicional.objects.create(evaluacion=instance, **ap)
+        if items_data is not None:
+            instance.items.all().delete()
+            self._replace_items(instance, items_data)
         return instance
+
+    @staticmethod
+    def _replace_items(observacion, items_data):
+        ObservacionItem.objects.bulk_create(
+            [ObservacionItem(observacion=observacion, **item) for item in items_data]
+        )
+
+
+class ObservacionAmbienteSerializer(serializers.ModelSerializer):
+    evaluacion = EvaluacionPsicopedagogicaSerializer(read_only=True)
+    evaluacion_id = serializers.PrimaryKeyRelatedField(
+        queryset=EvaluacionPsicopedagogica.objects.all(),
+        source="evaluacion",
+        write_only=True,
+    )
+
+    class Meta:
+        model = ObservacionAmbiente
+        fields = "__all__"
+
+
+class ItemAmbienteEscolarSerializer(serializers.ModelSerializer):
+    evaluacion = serializers.PrimaryKeyRelatedField(read_only=True)
+    evaluacion_id = serializers.PrimaryKeyRelatedField(
+        queryset=EvaluacionAmbienteEscolar.objects.all(),
+        source="evaluacion",
+        write_only=True,
+    )
+
+    class Meta:
+        model = ItemAmbienteEscolar
+        fields = "__all__"
+
+
+class EvaluacionAmbienteEscolarSerializer(serializers.ModelSerializer):
+    estudiante = EstudianteSerializer(read_only=True)
+    estudiante_id = serializers.PrimaryKeyRelatedField(
+        queryset=Estudiante.objects.all(),
+        source="estudiante",
+        write_only=True,
+    )
+    items = ItemAmbienteEscolarSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = EvaluacionAmbienteEscolar
+        fields = "__all__"
+

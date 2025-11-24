@@ -50,3 +50,37 @@ def generar_pdf_anamnesis(anamnesis):
     # Retornar ruta relativa (para usar en front)
     relative_path = os.path.join("anamnesis_pdfs", filename)
     return relative_path
+
+
+def generar_pdf_registro_pie(registro):
+    """Genera un PDF muy simple con los datos principales del registro PIE."""
+    folder_path = os.path.join(settings.MEDIA_ROOT, "registros_pie")
+    os.makedirs(folder_path, exist_ok=True)
+    filename = f"registro_pie_{registro.id}.pdf"
+    file_path = os.path.join(folder_path, filename)
+
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawString(80, height - 60, "Registro PIE")
+
+    pdf.setFont("Helvetica", 11)
+    pdf.drawString(80, height - 100, f"Curso: {registro.curso}")
+    pdf.drawString(80, height - 120, f"Periodo: {registro.periodo or 'No definido'}")
+    pdf.drawString(80, height - 140, f"Responsable: {registro.responsable or 'Sin responsable'}")
+
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(80, height - 180, "Observaciones:")
+    pdf.setFont("Helvetica-Oblique", 9)
+    pdf.drawString(80, height - 200, (registro.observaciones_generales or "Sin observaciones")[:120])
+
+    pdf.showPage()
+    pdf.save()
+
+    with open(file_path, "wb") as handler:
+        handler.write(buffer.getvalue())
+
+    buffer.close()
+    return os.path.join("registros_pie", filename)

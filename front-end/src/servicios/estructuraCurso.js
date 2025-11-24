@@ -1,5 +1,5 @@
 // src/servicios/estructuraCurso.js
-import axios from 'axios';
+import api from './api';
 
 // === Utilidades ===
 function normalizarEstablecimiento(s) {
@@ -9,6 +9,28 @@ function normalizarEstablecimiento(s) {
   } catch {
     return String(s).replace(/-/g, ' ').trim();
   }
+}
+
+function parseMaybeId(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getEstablecimientoNombre(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') return value.nombre || value.nombre_display || '';
+  return String(value);
+}
+
+function getEstablecimientoId(value) {
+  if (!value) return null;
+  if (typeof value === 'object' && value.id != null) {
+    const num = Number(value.id);
+    return Number.isFinite(num) ? num : null;
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 function compararIgual(a, b) {
   return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
@@ -83,18 +105,19 @@ function extraerSeccion(display) {
  */
 export async function obtenerEstructuraCurso(nombreEst) {
   const establecimientoQ = normalizarEstablecimiento(nombreEst);
+  const establecimientoId = parseMaybeId(nombreEst);
   let cursosRaw = [];
 
   try {
-    const params = establecimientoQ ? { establecimiento: establecimientoQ } : {};
-    const r = await axios.get('/api/cursos/', { params });
-    cursosRaw = Array.isArray(r.data) ? r.data : [];
+    const r = await api.get('/cursos/');
+    const todos = Array.isArray(r.data) ? r.data : (r.data?.results ?? []);
 
-    if (establecimientoQ && cursosRaw.length === 0) {
-      // Fallback: algunos backends no filtran, así que traemos todo y filtramos aquí
-      const r2 = await axios.get('/api/cursos/');
-      const todos = Array.isArray(r2.data) ? r2.data : [];
-      cursosRaw = todos.filter((c) => compararIgual(c.establecimiento, establecimientoQ));
+    if (establecimientoId != null) {
+      cursosRaw = todos.filter((c) => getEstablecimientoId(c.establecimiento) === establecimientoId);
+    } else if (establecimientoQ) {
+      cursosRaw = todos.filter((c) => compararIgual(getEstablecimientoNombre(c.establecimiento), establecimientoQ));
+    } else {
+      cursosRaw = todos;
     }
   } catch (err) {
     if (err?.response?.status === 404) {
@@ -104,7 +127,12 @@ export async function obtenerEstructuraCurso(nombreEst) {
   }
 
   const cursos = cursosRaw
-    .map((c) => ({ ...c, nombre_display: construirNombreDisplay(c) }))
+    .map((c) => ({
+      ...c,
+      nombre_display: construirNombreDisplay(c),
+      establecimiento_nombre: getEstablecimientoNombre(c.establecimiento),
+      establecimiento_id: getEstablecimientoId(c.establecimiento),
+    }))
     .sort((a, b) => {
       const cr = cicloRank(a.nombre_display) - cicloRank(b.nombre_display);
       if (cr !== 0) return cr;
@@ -114,21 +142,35 @@ export async function obtenerEstructuraCurso(nombreEst) {
     });
 
   const nombreDetectado =
-    establecimientoQ || (cursos[0]?.establecimiento ? String(cursos[0].establecimiento) : '');
+    cursos[0]?.establecimiento_nombre || establecimientoQ || '';
+  let idDetectado = cursos[0]?.establecimiento_id ?? establecimientoId;
+
+  if (!idDetectado && establecimientoQ) {
+    try {
+      const estRes = await api.get('/establecimientos/');
+      const listaEst = Array.isArray(estRes.data) ? estRes.data : (estRes.data?.results ?? []);
+      const encontrado = listaEst.find((est) => compararIgual(est.nombre, establecimientoQ));
+      if (encontrado) {
+        idDetectado = encontrado.id;
+      }
+    } catch (err) {
+      console.warn('[obtenerEstructuraCurso] No se pudo resolver el establecimiento por nombre.', err);
+    }
+  }
 
   return {
-    establecimiento: { nombre: nombreDetectado },
+    establecimiento: { id: idDetectado, nombre: nombreDetectado },
     cursos,
   };
 }
 
 export async function crearCurso(payload) {
-  return (await axios.post('/api/cursos/', payload)).data;
+  return (await api.post('/cursos/', payload)).data;
 }
 
 // === NUEVO: actualizar un curso (PATCH parcial) ===
 export async function actualizarCurso(id, payload) {
-  // Si tu back NO usa slash final, cambia a `/api/cursos/${id}`
-  const { data } = await axios.patch(`/api/cursos/${id}/`, payload);
+  // Si tu back NO usa slash final, cambia a `/cursos/${id}`
+  const { data } = await api.patch(`/cursos/${id}/`, payload);
   return data;
 }

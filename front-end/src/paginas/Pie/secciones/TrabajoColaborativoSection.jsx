@@ -9,7 +9,7 @@ export default function TrabajoColaborativoSection({ registroId, items, setItems
     <section>
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h5 className="mb-0">Trabajo Colaborativo</h5>
-        <button className="btn btn-primary btn-sm" onClick={() => onSave(items)}>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => onSave(items)}>
           Guardar sección
         </button>
       </div>
@@ -55,7 +55,7 @@ export default function TrabajoColaborativoSection({ registroId, items, setItems
           e.preventDefault();
           const f = e.currentTarget;
           const nuevo = {
-            id: Date.now(),
+            id: `temp-${Date.now()}`,
             fecha: f.fecha.value,
             tipo: f.tipo.value,
             descripcion: f.descripcion.value.trim(),

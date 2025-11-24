@@ -5,12 +5,20 @@ import React from "react";
  * Campos: estudiante(FK), fecha, logros, dificultades, estrategias_utilizadas, comentarios
  * Nota: En el front puedes ingresar RUN, pero para el backend envía estudiante: <id>
  */
-export default function LogrosSection({ registroId, items, setItems, onSave, onDelete }) {
+export default function LogrosSection({ registroId, items, setItems, onSave, onDelete, estudiantes = [] }) {
+  const obtenerNombreEstudiante = (logro) => {
+    const id = logro.estudiante_id || logro.estudiante;
+    const info = estudiantes.find((est) => String(est.id) === String(id));
+    if (info) return info.nombres_apellidos;
+    if (logro.estudiante?.nombres_apellidos) return logro.estudiante.nombres_apellidos;
+    return id || "—";
+  };
+
   return (
     <section>
       <div className="d-flex justify-content-between align-items-center mb-2">
         <h5 className="mb-0">Logros de Aprendizaje</h5>
-        <button className="btn btn-primary btn-sm" onClick={() => onSave(items)}>
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => onSave(items)}>
           Guardar sección
         </button>
       </div>
@@ -19,7 +27,7 @@ export default function LogrosSection({ registroId, items, setItems, onSave, onD
         <table className="table table-striped table-bordered align-middle">
           <thead>
             <tr>
-              <th>RUN/Estudiante</th>
+              <th>Estudiante</th>
               <th>Fecha</th>
               <th>Logros</th>
               <th>Dificultades</th>
@@ -36,7 +44,7 @@ export default function LogrosSection({ registroId, items, setItems, onSave, onD
             )}
             {items.map((l) => (
               <tr key={l.id}>
-                <td>{l.estudiante}</td>
+                <td>{obtenerNombreEstudiante(l)}</td>
                 <td>{l.fecha}</td>
                 <td>{l.logros}</td>
                 <td>{l.dificultades}</td>
@@ -60,9 +68,8 @@ export default function LogrosSection({ registroId, items, setItems, onSave, onD
           e.preventDefault();
           const f = e.currentTarget;
           const nuevo = {
-            id: Date.now(),
-            // En UI: RUN o nombre. Para backend: estudiante: <id>
-            estudiante: f.estudiante.value.trim(),
+            id: `temp-${Date.now()}`,
+            estudiante_id: f.estudiante_id.value,
             fecha: f.fecha.value,
             logros: f.logros.value.trim(),
             dificultades: f.dificultades.value.trim(),
@@ -74,9 +81,14 @@ export default function LogrosSection({ registroId, items, setItems, onSave, onD
           f.reset();
         }}
       >
-        <div className="col-md-2">
-          <label className="form-label">RUN/Estudiante</label>
-          <input name="estudiante" className="form-control" placeholder="12345678-9 o ID" required />
+        <div className="col-md-3">
+          <label className="form-label">Estudiante</label>
+          <select name="estudiante_id" className="form-select" required>
+            <option value="">Seleccione…</option>
+            {estudiantes.map((est) => (
+              <option key={est.id} value={est.id}>{est.nombres_apellidos}</option>
+            ))}
+          </select>
         </div>
         <div className="col-md-2">
           <label className="form-label">Fecha</label>

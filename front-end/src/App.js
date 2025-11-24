@@ -1,42 +1,38 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 // Componentes de diseño
-import BarraNavegacion from "./componentes/diseno/BarraNavegacion";
+import Navbar from "./componentes/interfaz/Navbar";
 
 // Páginas
 import DatosDelSostenedor from "./paginas/Sostenedor/DatosDelSostenedor";
+import Establecimientos from "./paginas/Establecimientos/Establecimientos";
 import EstructuraDeCurso from "./paginas/Establecimientos/EstructuraDeCurso";
+import Cursos from "./paginas/cursos/Cursos";
+import Estudiantes from "./paginas/alumnos/Estudiantes";
+import Apoderados from "./paginas/alumnos/Apoderados";
 import AlumnosDelCurso from "./paginas/alumnos/AlumnosDelCurso";
 import Login from "./paginas/auth/login";
 import PerfilUsuario from "./paginas/perfil/PerfilUsuario";
 import RecuperarContrasena from "./paginas/auth/RecuperarContrasena";
 import RestablecerContrasena from "./paginas/auth/RestablecerContrasena";
+import RegistroPIE from "./paginas/Pie/RegistroPIE";
+
+import Usuarios from "./paginas/usuarios/Usuarios";
 
 // Nueva página psicopedagógica
-import EvaluacionPsicoList from "./paginas/psicopedagogica/EvaluacionPsicoList";
-import EvaluacionPsicoLista from "./paginas/psicopedagogica/EvaluacionPsicoLista";
 import EvaluacionPsicoForm from "./paginas/psicopedagogica/EvaluacionPsicoForm";
+import EvaluacionPsicopedagogica from "./paginas/psicopedagogica/EvaluacionPsicopedagogica";
 import SaludForm from "./paginas/salud/SaludForm";
 
 // Contexto de autenticación
 import { AuthProvider, useAuth } from "./contexto/AuthContext";
 
-<<<<<<< HEAD
 // -------------------------------------------------------------
 //  RUTA PROTEGIDA
 // -------------------------------------------------------------
-=======
-// 👇 Módulo Usuarios
-import Usuarios from "./paginas/usuarios/Usuarios";
-
-// 👇 Módulo PIE
-import RegistroPIE from "./paginas/Pie/RegistroPIE";
-
-// 👇 NUEVO: Módulo Anamnesis
-import Anamnesis from "./paginas/Anamnesis/Anamnesis";
-
->>>>>>> compañero/main
 function ProtectedRoute({ children }) {
   const { isAuth, status } = useAuth();
 
@@ -46,18 +42,29 @@ function ProtectedRoute({ children }) {
   // Si no está logueado → redirige a login
   if (!isAuth) return <Navigate to="/login" replace />;
 
-  return children;
+  return (
+    <>
+      <Navbar />
+      {children}
+
+    </>
+  );
 }
 
 // -------------------------------------------------------------
-//  APP PRINCIPAL
+//  HOME AUTO-REDIRECT SEGÚN SESIÓN
 // -------------------------------------------------------------
+function HomeRedirect() {
+  const { isAuth, status } = useAuth();
+  if (status !== "ready") return null;
+  return isAuth ? <Navigate to="/sostenedor" /> : <Navigate to="/login" />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <BarraNavegacion />
-
+        <ToastContainer position="top-right" autoClose={4000} newestOnTop pauseOnHover={false} />
         <main>
           <Routes>
             {/* Redirección según si hay sesión */}
@@ -72,12 +79,92 @@ export default function App() {
             {/*            RUTAS PROTEGIDAS (REQUIERE LOGIN)            */}
             {/* ------------------------------------------------------ */}
 
-            {/* Página Psicopedagógica */}
+
+            {/* Usuarios */}
+            <Route
+              path="/usuarios"
+              element={
+                <ProtectedRoute>
+                  <Usuarios />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Establecimientos */}
+            <Route
+              path="/establecimientos"
+              element={
+                <ProtectedRoute>
+                  <Establecimientos />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Cursos */}
+            <Route
+              path="/cursos"
+              element={
+                <ProtectedRoute>
+                  <Cursos />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Estudiantes */}
+            <Route
+              path="/estudiantes"
+              element={
+                <ProtectedRoute>
+                  <Estudiantes />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/apoderados"
+              element={
+                <ProtectedRoute>
+                  <Apoderados />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Registro PIE */}
+            <Route
+              path="/registro-pie"
+              element={
+                <ProtectedRoute>
+                  <RegistroPIE />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Evaluación Psicopedagógica */}
             <Route
               path="/evaluacion-psicopedagogica"
               element={
                 <ProtectedRoute>
-                  <EvaluacionPsicoList />
+                  <EvaluacionPsicopedagogica />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Evaluación de Salud */}
+            <Route
+              path="/evaluacion-salud"
+              element={
+                <ProtectedRoute>
+                  <SaludForm />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Informes para la familia */}
+            <Route
+              path="/informes-familia"
+              element={
+                <ProtectedRoute>
+                  <div className="container py-4"><h2>Informes para la familia</h2><p>Página de informes (implementa aquí tu componente)</p></div>
                 </ProtectedRoute>
               }
             />
@@ -122,36 +209,6 @@ export default function App() {
               }
             />
 
-<<<<<<< HEAD
-            {/* Nueva ruta para el formulario de salud */}
-            <Route
-              path="/salud"
-              element={
-                <ProtectedRoute>
-                  <SaludForm />
-=======
-            {/* 👇 RUTA PROTEGIDA: Usuarios */}
-            <Route
-              path="/usuarios"
-              element={
-                <ProtectedRoute>
-                  <Usuarios />
->>>>>>> compañero/main
-                </ProtectedRoute>
-              }
-            />
-
-<<<<<<< HEAD
-            {/* Rutas protegidas para evaluaciones psicopedagógicas */}
-            {/* Página Psicopedagógica - Lista */}
-            <Route
-              path="/psicopedagogica/evaluaciones"
-              element={
-                <ProtectedRoute>
-                  <EvaluacionPsicoLista />
-                </ProtectedRoute>
-              }
-            />
             {/* Página Psicopedagógica - Crear */}
             <Route
               path="/psicopedagogica/evaluaciones/nueva"
@@ -167,33 +224,11 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <EvaluacionPsicoForm />
-=======
-            {/* 👇 RUTA PROTEGIDA: Registro PIE */}
-            <Route
-              path="/pie"
-              element={
-                <ProtectedRoute>
-                  <RegistroPIE />
->>>>>>> compañero/main
                 </ProtectedRoute>
               }
             />
 
-<<<<<<< HEAD
             {/* Fallback: cualquier ruta inválida vuelve al inicio */}
-=======
-            {/* 👇 NUEVA RUTA PROTEGIDA: Anamnesis */}
-            <Route
-              path="/anamnesis"
-              element={
-                <ProtectedRoute>
-                  <Anamnesis />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Fallback */}
->>>>>>> compañero/main
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
@@ -202,17 +237,3 @@ export default function App() {
   );
 }
 
-// -------------------------------------------------------------
-//  HOME AUTO-REDIRECT SEGÚN SESIÓN
-// -------------------------------------------------------------
-function HomeRedirect() {
-  const { isAuth, status } = useAuth();
-
-  if (status !== "ready") return null;
-
-  return isAuth ? (
-    <Navigate to="/sostenedor" replace />
-  ) : (
-    <Navigate to="/login" replace />
-  );
-}
